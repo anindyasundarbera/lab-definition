@@ -15,14 +15,18 @@ integration. Image resolution is not acceptance.
 
 Stage OH-001C closes the pre-installation provenance gate defined below and
 adds the minimal lab-owned Python dependency input
-(`manifests/openhands/pyproject.toml`). OH-001C performs no installation,
-no transitive lock generation, no image pull, no clone/fetch, no bootstrap,
-no acceptance, no runtime start, and no Serena integration. The provenance
-evidence recorded in OH-001C was observed by the Human Steward via a
-read-only upstream probe on 2026-08-15; it is authoritative input for this
-candidate but was NOT independently re-verified by Agent Lab, which has no
-network/clone capability in this stage. OpenHands remains `enabled = false`
-and `status = "experimental"`.
+(`manifests/openhands/pyproject.toml`). OH-001C also adopts the upstream
+OpenHands third-party freshness guardrail (`exclude-newer = "7 days"` with
+the two first-party packages exempt; see "Supply-chain freshness policy
+(OH-001C)" below) and records the rejection of a previously generated
+unguarded lock. OH-001C performs no installation, no transitive lock
+generation, no image pull, no clone/fetch, no bootstrap, no acceptance, no
+runtime start, and no Serena integration. The provenance evidence recorded
+in OH-001C was observed by the Human Steward via a read-only upstream probe
+on 2026-08-15; it is authoritative input for this candidate but was NOT
+independently re-verified by Agent Lab, which has no network/clone
+capability in this stage. OpenHands remains `enabled = false` and
+`status = "experimental"`.
 
 ## Provenance
 
@@ -212,6 +216,49 @@ or fabricated. No container reference appears in this file; the Agent
 Server digest remains a separate pin in `manifests/components.toml` and is
 never an input to the Python dependency lock.
 
+### Supply-chain freshness policy (OH-001C)
+
+The `[tool.uv]` table in `manifests/openhands/pyproject.toml` carries a
+third-party resolution freshness guardrail matching the upstream OpenHands
+repository policy:
+
+- `exclude-newer = "7 days"` — third-party transitive resolutions are
+  subject to a 7-day freshness cooldown. A transitive published less than
+  seven days before resolution is excluded.
+- `exclude-newer-package` exempts the two first-party OpenHands packages
+  from that delay: `openhands-sdk = false` and `openhands-tools = false`.
+
+The exemption is scoped deliberately. `openhands-sdk==1.42.1` and
+`openhands-tools==1.42.1` are the only direct host inputs; they are
+explicitly release-pinned and provenance-verified (the release-to-commit
+and host-package bindings were closed by the OH-001C provenance gate
+above). They are first-party and may be resolved at their pinned version
+regardless of publication age. Third-party transitives are not
+individually provenance-verified and must observe the cooldown.
+
+The committed source policy is the *relative* 7-day rule. When the
+lab-managed `uv` later generates the lock, `uv lock` evaluates
+`exclude-newer` against resolution time and persists the *concrete*
+resolved cutoff (an absolute timestamp) into `manifests/openhands/uv.lock`.
+The lock's persisted cutoff is the materialized snapshot; the committed
+source policy in `pyproject.toml` remains the relative 7-day rule and is
+the authoritative input for any future re-resolution. No additional
+dependency or source override is introduced by this policy.
+
+### Rejected unguarded lock
+
+A first lock-generation probe using the lab-managed `uv` successfully
+resolved, but inspection of the resulting `uv.lock` upload-time metadata
+showed multiple third-party transitives were less than 7 days old at
+resolution time, including some only hours old. That generated lock is
+explicitly REJECTED: it is not authoritative, must not be imported or
+committed, and must not be recreated in this stage. It was generated
+without the freshness guardrail above. A fresh lab-managed `uv` lock must
+be generated only after this supply-chain policy lands, and remains
+PENDING EXECUTION (see "Deferred dependency locking and runtime
+materialization" below). No `uv.lock` is committed or fabricated in
+OH-001C.
+
 ## Deferred dependency locking and runtime materialization
 
 OH-001C records the dependency *input* only. Dependency locking and
@@ -224,9 +271,12 @@ mechanism that will later generate the lock is:
 `uv lock` does not create a project environment; it only resolves and
 writes `manifests/openhands/uv.lock` (a universal lock constrained to
 Python 3.13 by `requires-python`), using the lab-managed uv from
-`bootstrap/bootstrap.sh` (pinned in `bootstrap/versions.env`). The
-generated `uv.lock` is a committed definition artifact and is kept next
-to the `pyproject.toml` under the definition tree.
+`bootstrap/bootstrap.sh` (pinned in `bootstrap/versions.env`). Resolution
+runs under the "Supply-chain freshness policy (OH-001C)" guardrail above;
+`uv lock` persists the concrete resolved cutoff into the generated
+`uv.lock` while the committed source policy remains the relative 7-day
+rule. The generated `uv.lock` is a committed definition artifact and is
+kept next to the `pyproject.toml` under the definition tree.
 
 The later materialization (sync) must keep runtime state OUT of the
 definition tree. uv defaults the project environment to `.venv` adjacent
