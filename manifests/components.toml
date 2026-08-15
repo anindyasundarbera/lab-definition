@@ -13,8 +13,13 @@ commit = "bcac0969fb8685783ea6d0f2642468fcc47e6395"
 runtime = "python"
 python = "3.13"
 
-# OpenHands is EXPERIMENTAL: not accepted, not baseline, not installed in OH-001A.
-# OH-001A is provenance/definition only; no runtime, bootstrap, or acceptance changes.
+# OpenHands is EXPERIMENTAL: not accepted, not baseline, not installed.
+# OH-001A = provenance/definition only. OH-001B = immutable Agent Server
+# artifact pin. OH-001C = closes the pre-installation provenance gate (per
+# Human-Steward evidence observed 2026-08-15, not independently re-verified by
+# Agent Lab) and adds the lab-owned Python dependency input. No install, pull,
+# fetch, lock generation, or runtime start is performed in any of these stages.
+# OpenHands remains disabled/experimental.
 [components.openhands]
 enabled = false
 status = "experimental"
@@ -24,12 +29,24 @@ version = "v1.42.1"
 commit = "167c1f924ac8a8acbeb0432bf9b1fcf77d5c2497"
 runtime = "python"
 python = "3.13"
+# OH-001C: lab-owned direct Python dependency input (source definition only).
+# Path is relative to LAB_DEFINITION_ROOT. Contains only the direct,
+# release-pinned host packages and the Python target; NO transitive lock and
+# NO container digest. The resolved uv.lock is generated later by the
+# lab-managed uv and is pending (see docs/COMPONENT-OPENHANDS.md).
+python_deps = "manifests/openhands/pyproject.toml"
 
-# OH-001B: immutable Agent Server artifact record. OpenHands remains
-# disabled/experimental; no install, pull, fetch, or runtime start is implied.
-# The runtime pin is the platform-specific manifest digest; the index digest
-# is retained as supply-chain/provenance evidence only. Runtime execution must
-# use agent_server_runtime_ref (digest-qualified), never the mutable tag alone.
+# OH-001B: immutable Agent Server artifact record. These fields are
+# declarative provenance/evidence; Agent Lab has no manifest schema or
+# validator at this stage, so enforcement is intentionally deferred (the
+# manifest is permissive/declarative by design). Field semantics:
+#   agent_server_image_tag         - observed mutable tag (resolution input only)
+#   agent_server_platform          - target OCI platform (linux/amd64)
+#   agent_server_index_digest      - OCI image index digest (provenance only)
+#   agent_server_manifest_digest   - linux/amd64 runnable manifest digest (runtime pin)
+#   agent_server_runtime_ref       - digest-qualified runtime reference (only runnable form)
+#   agent_server_attestation_digest - attestation manifest digest (evidence only)
+# Runtime execution must use agent_server_runtime_ref, never the mutable tag.
 agent_server_image_tag = "ghcr.io/openhands/agent-server:167c1f9-python-amd64"
 agent_server_platform = "linux/amd64"
 agent_server_index_digest = "sha256:f8f9de91b57685384944346e263910b1648ca09ee6abef70ecbf406caece030f"

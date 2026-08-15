@@ -1,0 +1,35 @@
+# Agent Lab OpenHands host-side Python dependency definition.
+#
+# This is a lab-owned, component-scoped SOURCE definition only (added in
+# OH-001C). It declares exactly the direct, release-pinned host packages for
+# the OpenHands candidate at the Agent Lab Python 3.13 target. It is NOT an
+# installable package: [tool.uv] package = false makes it an explicitly
+# non-package/virtual dependency-definition project for uv (it also has no
+# [build-system] and is not published).
+#
+# No transitive dependency lock is hand-authored here and no uv.lock is
+# committed. The resolved lock is generated later by the lab-managed uv
+# (pinned in bootstrap/versions.env) and is PENDING EXECUTION; see
+# docs/COMPONENT-OPENHANDS.md for the deterministic lab command.
+#
+# The Agent Server container digest is a separate, immutable runtime
+# artifact pin recorded in manifests/components.toml. No container
+# reference belongs in this file; this Python input must never contain a
+# GHCR digest.
+#
+# Scope: openhands-sdk and openhands-tools only. openhands-workspace and
+# openhands-agent-server are intentionally not host-installed (see
+# docs/COMPONENT-OPENHANDS.md).
+
+[project]
+name = "agent-lab-openhands-deps"
+version = "0.0.0"
+description = "Agent Lab OpenHands host-side direct dependency definition (not published)."
+requires-python = ">=3.13,<3.14"
+dependencies = [
+    "openhands-sdk==1.42.1",
+    "openhands-tools==1.42.1",
+]
+
+[tool.uv]
+package = false
