@@ -45,7 +45,12 @@ export UV_TOOL_DIR="$LAB_RUNTIME_ROOT/uv-tools"
 export UV_TOOL_BIN_DIR="$LAB_RUNTIME_ROOT/uv-tool-bin"
 export UV_CACHE_DIR="$LAB_RUNTIME_ROOT/cache/uv"
 
+# Serena is entirely contained by Agent Lab.
+export SERENA_HOME="$LAB_STATE_ROOT/serena"
+export SERENA_USAGE_REPORTING=false
+
 LAB_UV="$LAB_RUNTIME_ROOT/bin/uv"
+LAB_SERENA="$LAB_RUNTIME_ROOT/uv-tool-bin/serena"
 
 print_tool_status() {
     local tool="$1"
@@ -405,6 +410,40 @@ lab_uv() {
     exec "$LAB_UV" "$@"
 }
 
+lab_serena() {
+    if [[ ! -x "$LAB_SERENA" ]]; then
+        echo "Lab-managed Serena is not installed." >&2
+        echo "Run the Serena component bootstrap first." >&2
+        exit 1
+    fi
+
+    mkdir -p "$SERENA_HOME"
+
+    # Serena-managed tools such as Pyright invoke uv/uvx.
+    # Ensure they resolve to the lab-owned uv rather than the host installation.
+    export PATH="$LAB_RUNTIME_ROOT/bin:$LAB_RUNTIME_ROOT/uv-tool-bin:$PATH"
+
+    exec "$LAB_SERENA" "$@"
+}
+
+lab_test() {
+    local component="${1:-}"
+
+    case "$component" in
+        serena)
+            exec "$LAB_DEFINITION_ROOT/acceptance/serena/run.sh"
+            ;;
+        "")
+            echo "Usage: lab test <component>" >&2
+            exit 2
+            ;;
+        *)
+            echo "Unknown or unsupported test component: $component" >&2
+            exit 2
+            ;;
+    esac
+}
+
 usage() {
     cat <<USAGE
 Usage:
@@ -412,12 +451,14 @@ Usage:
   lab doctor
   lab env
   lab uv <args>
+  lab serena <args>
 
 Commands:
   status    Show workspace and tool status
   doctor    Validate host and Agent Lab prerequisites
-  env       Show resolved LAB_* and UV_* environment variables
+  env       Show resolved LAB_*, UV_*, and component environment variables
   uv        Run the lab-managed uv executable
+  serena    Run the lab-managed Serena executable
 USAGE
 }
 
@@ -434,6 +475,14 @@ case "${1:-status}" in
     uv)
         shift
         lab_uv "$@"
+        ;;
+    serena)
+        shift
+        lab_serena "$@"
+        ;;
+    test)
+        shift
+        lab_test "$@"
         ;;
     -h|--help|help)
         usage

@@ -4,9 +4,14 @@ schema_version = 1
 # its Agent Lab acceptance test.
 
 [components.serena]
-enabled = false
+enabled = true
+status = "accepted"
 source = "github"
 repository = "oraios/serena"
+version = "v1.6.1"
+commit = "bcac0969fb8685783ea6d0f2642468fcc47e6395"
+runtime = "python"
+python = "3.13"
 
 [components.openhands]
 enabled = false
