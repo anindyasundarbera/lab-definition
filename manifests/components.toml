@@ -13,10 +13,17 @@ commit = "bcac0969fb8685783ea6d0f2642468fcc47e6395"
 runtime = "python"
 python = "3.13"
 
+# OpenHands is EXPERIMENTAL: not accepted, not baseline, not installed in OH-001A.
+# OH-001A is provenance/definition only; no runtime, bootstrap, or acceptance changes.
 [components.openhands]
 enabled = false
+status = "experimental"
 source = "github"
-repository = "OpenHands/OpenHands"
+repository = "OpenHands/software-agent-sdk"
+version = "v1.42.1"
+commit = "167c1f924ac8a8acbeb0432bf9b1fcf77d5c2497"
+runtime = "python"
+python = "3.13"
 
 [components.dagger]
 enabled = false
