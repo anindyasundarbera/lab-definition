@@ -13,6 +13,17 @@ false` and `status = "experimental"`. OH-001B performs no installation,
 image pull, clone, fetch, bootstrap, acceptance, runtime start, or Serena
 integration. Image resolution is not acceptance.
 
+Stage OH-001C closes the pre-installation provenance gate defined below and
+adds the minimal lab-owned Python dependency input
+(`manifests/openhands/pyproject.toml`). OH-001C performs no installation,
+no transitive lock generation, no image pull, no clone/fetch, no bootstrap,
+no acceptance, no runtime start, and no Serena integration. The provenance
+evidence recorded in OH-001C was observed by the Human Steward via a
+read-only upstream probe on 2026-08-15; it is authoritative input for this
+candidate but was NOT independently re-verified by Agent Lab, which has no
+network/clone capability in this stage. OpenHands remains `enabled = false`
+and `status = "experimental"`.
+
 ## Provenance
 
 - repository: `OpenHands/software-agent-sdk`
@@ -36,16 +47,21 @@ checkout and a pinned runtime installation are independent concerns:
 - A later stage may install from the same release without re-deriving
   provenance, but installation is gated separately below.
 
-Neither OH-001A nor OH-001B performs any source clone, fetch, pull, image
-pull, package install, or runtime start. Both stages are record-only.
+Neither OH-001A, OH-001B, nor OH-001C performs any source clone, fetch,
+pull, image pull, package install, transitive lock generation, or runtime
+start. All three stages are record-only.
 
 ## Planned host-side packages
 
-When runtime installation is later authorized in OH-001C or later (a later
-runtime-materialization stage), the planned host-side packages are exactly:
+The planned host-side packages are exactly:
 
 - `openhands-sdk==1.42.1`
 - `openhands-tools==1.42.1`
+
+OH-001C records these as a lab-owned direct dependency input
+(`manifests/openhands/pyproject.toml`, see "Python dependency input" below).
+Recording the input does not install them; no package install, transitive
+lock generation, or materialization is performed in this stage.
 
 `openhands-workspace` and `openhands-agent-server` are not host-installed
 initially. The workspace package is not needed on the host because Agent
@@ -61,6 +77,24 @@ image was observed via `docker buildx imagetools inspect` against the tag
 `ghcr.io/openhands/agent-server:167c1f9-python-amd64`. The tag prefix
 `167c1f9` corresponds to the recorded OpenHands source commit prefix from
 OH-001A (`167c1f924ac8a8acbeb0432bf9b1fcf77d5c2497`).
+
+OH-001C adds the Human-Steward-observed upstream tag-construction evidence
+that closes the SHA-derived-image-tag gap: at the recorded source commit,
+the upstream Agent Server build derives `SHORT_SHA` from `SDK_SHA` (or
+`GITHUB_SHA`) and constructs the tag
+`ghcr.io/openhands/agent-server:{sha[:7]}-python-{arch}`. The release
+commit's `sha7` is therefore `167c1f9`, which is exactly the tag prefix
+recorded in OH-001B. This evidence was observed read-only by the Human
+Steward on 2026-08-15; Agent Lab did not re-derive it.
+
+OH-001C also records the digest-qualified runtime manifest probe: the
+reference
+`ghcr.io/openhands/agent-server@sha256:67d3b88984dd0537de78cf5a354898942d601b8fab9b633a655a4d57bed08d02`
+resolves directly as `application/vnd.oci.image.manifest.v1+json` with the
+same digest. This confirms the digest-qualified runtime reference points
+directly at the runnable `linux/amd64` image manifest (not at the OCI
+index), closing the digest-qualified-runtime-ref gap. This too is
+Human-Steward-observed evidence, not Agent-Lab-verified.
 
 Observed and recorded immutable metadata (mirrored in
 `manifests/components.toml` under `[components.openhands]`):
@@ -90,6 +124,18 @@ This is evidence only. It is not the runtime image and must not be mistaken
 for the runnable image. It is recorded in the manifest as
 `agent_server_attestation_digest` for traceability.
 
+The three digests are distinct and must not be conflated:
+
+- runnable `linux/amd64` image manifest digest:
+  `sha256:67d3b88984dd0537de78cf5a354898942d601b8fab9b633a655a4d57bed08d02`
+  (the runtime pin);
+- OCI index digest:
+  `sha256:f8f9de91b57685384944346e263910b1648ca09ee6abef70ecbf406caece030f`
+  (the top-level index envelope, provenance only);
+- attestation manifest digest:
+  `sha256:a04dd37c5436d9f64c7db012167e010be1d3009775c625b7b5fab9ad97522186`
+  (evidence only).
+
 Runtime execution, if ever later authorized, must use the digest-qualified
 runtime reference
 (`ghcr.io/openhands/agent-server@sha256:67d3b88...08d02`), never the
@@ -101,11 +147,21 @@ or installed. OpenHands remains `enabled = false` and
 `status = "experimental"`. No image pull, runtime start, or acceptance
 execution is performed or implied by this record.
 
+## Manifest schema note
+
+Agent Lab has no manifest schema or validator at this stage. The
+`agent_server_*` fields in `manifests/components.toml` are declarative
+provenance/evidence records; their field semantics are documented in place
+in that file. Schema enforcement (type/format/range validation of those
+fields) is intentionally deferred and is out of scope for OH-001C. No
+validation subsystem is introduced; the manifest remains
+permissive/declarative by design until a later, separately scoped stage
+defines a schema and validator.
+
 ## Pre-installation provenance gate
 
 Before any package installation or runtime materialization of OpenHands is
-authorized, the following independent proof must be completed (it is NOT
-claimed to be completed in this candidate):
+authorized, the following independent proof must be completed:
 
 1. Prove that release tag `v1.42.1` dereferences to the exact source
    commit `167c1f924ac8a8acbeb0432bf9b1fcf77d5c2497` recorded in OH-001A.
@@ -116,22 +172,87 @@ claimed to be completed in this candidate):
    (`openhands-sdk==1.42.1`, `openhands-tools==1.42.1`) correspond to the
    same release, with no floating versions or surrogate packages.
 
-This gate is a hard precondition for any OH-001C-or-later installation
-stage. Until it is satisfied, no host-side package install or Agent Server
-runtime materialization may proceed.
+### OH-001C: gate satisfaction (Steward-observed, not Agent-Lab-verified)
+
+OH-001C records that both proofs above are satisfied per authoritative
+Human-Steward evidence obtained by a read-only upstream probe on
+2026-08-15:
+
+1. Release binding PASS: `v1.42.1` dereferences to the exact source commit
+   `167c1f924ac8a8acbeb0432bf9b1fcf77d5c2497`.
+2. Host package binding PASS at that exact source commit:
+   `openhands-sdk = 1.42.1` and `openhands-tools = 1.42.1`, with no floating
+   versions or surrogate packages.
+
+This satisfies and closes the pre-installation provenance gate for
+purposes of proceeding to later dependency locking and runtime
+materialization under separate Steward authorization. The Human-Steward
+read-only upstream probe is the independent provenance proof the gate
+requires; it was upstream-observed rather than independently re-verified
+by Agent Lab tooling in this stage, but that observation does not reopen
+the gate or add a new prerequisite. Agent Lab may later automate/replay
+this proof (e.g. a deterministic, lab-managed re-probe) as a
+reproducibility/acceptance enhancement; such an enhancement is not an
+additional blocking gate unless separately authorized by the Steward.
+
+## Python dependency input
+
+OH-001C adds the minimal lab-owned direct dependency input at
+`manifests/openhands/pyproject.toml`. It is a component-scoped, explicitly
+non-package/virtual dependency-definition project (declared via
+`[tool.uv] package = false`; no build-system, not a published package)
+consumed by the lab-managed `uv`. It declares exactly:
+
+- `requires-python = ">=3.13,<3.14"` (the Agent Lab Python 3.13 target), and
+- the two direct, release-pinned host packages
+  `openhands-sdk==1.42.1` and `openhands-tools==1.42.1`.
+
+No transitive dependencies are hand-authored and no `uv.lock` is committed
+or fabricated. No container reference appears in this file; the Agent
+Server digest remains a separate pin in `manifests/components.toml` and is
+never an input to the Python dependency lock.
 
 ## Deferred dependency locking and runtime materialization
 
-Dependency locking and runtime materialization are deferred to the next
-stage. When authorized, they must be performed with the lab-managed `uv`
-toolchain, not hand-authored. No transitive dependency lock is invented or
-hand-authored in OH-001B; no fabricated lockfile is committed. The
-lab-managed `uv` lock covers only the Python host package dependency graph
-derived from the release-pinned host packages above. The Agent Server
-digest is a separate immutable runtime artifact pin and must remain
+OH-001C records the dependency *input* only. Dependency locking and
+runtime materialization remain deferred and must be performed with the
+lab-managed `uv` toolchain, not hand-authored. The deterministic lab
+mechanism that will later generate the lock is:
+
+    lab uv lock --project "$LAB_DEFINITION_ROOT/manifests/openhands"
+
+`uv lock` does not create a project environment; it only resolves and
+writes `manifests/openhands/uv.lock` (a universal lock constrained to
+Python 3.13 by `requires-python`), using the lab-managed uv from
+`bootstrap/bootstrap.sh` (pinned in `bootstrap/versions.env`). The
+generated `uv.lock` is a committed definition artifact and is kept next
+to the `pyproject.toml` under the definition tree.
+
+The later materialization (sync) must keep runtime state OUT of the
+definition tree. uv defaults the project environment to `.venv` adjacent
+to the `pyproject.toml`, which would put persistent runtime state inside
+the portable definition repository. The `lab uv` wrapper (`bin/lab`)
+execs the lab-managed uv without overriding the project environment (it
+sets `UV_PYTHON_INSTALL_DIR`, `UV_TOOL_DIR`, `UV_CACHE_DIR`, etc., but not
+`UV_PROJECT_ENVIRONMENT`), so the sync command must set
+`UV_PROJECT_ENVIRONMENT` explicitly to a portable path under `$LAB_ROOT`
+consistent with existing runtime conventions (`$LAB_ROOT/runtime/...`):
+
+    lab uv python install 3.13
+    UV_PROJECT_ENVIRONMENT="$LAB_ROOT/runtime/openhands" \
+        lab uv sync --project "$LAB_DEFINITION_ROOT/manifests/openhands" --python 3.13
+
+The lock and the sync/materialization above are PENDING EXECUTION and are
+not performed in this stage. No lockfile or environment is committed or
+created in this candidate.
+
+The lab-managed `uv` lock covers only the Python host package dependency
+graph derived from the release-pinned host packages above. The Agent
+Server digest is a separate immutable runtime artifact pin and must remain
 independently recorded and enforced; it is not an input to the Python
-dependency lock. Both are gated on the pre-installation provenance gate
-above passing.
+dependency lock. Runtime materialization remains gated on the
+pre-installation provenance gate above being closed and on separate
+Steward authorization.
 
 ## Docker execution boundary
 
