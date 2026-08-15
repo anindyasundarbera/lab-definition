@@ -236,14 +236,17 @@ above). They are first-party and may be resolved at their pinned version
 regardless of publication age. Third-party transitives are not
 individually provenance-verified and must observe the cooldown.
 
-The committed source policy is the *relative* 7-day rule. When the
-lab-managed `uv` later generates the lock, `uv lock` evaluates
-`exclude-newer` against resolution time and persists the *concrete*
-resolved cutoff (an absolute timestamp) into `manifests/openhands/uv.lock`.
-The lock's persisted cutoff is the materialized snapshot; the committed
-source policy in `pyproject.toml` remains the relative 7-day rule and is
-the authoritative input for any future re-resolution. No additional
-dependency or source override is introduced by this policy.
+The committed source policy is the *relative* 7-day rule. With the
+lab-managed uv 0.12.0, a generated lock preserves that relative policy
+using uv's sentinel/span representation: the inspected guarded lock records
+`exclude-newer = "0001-01-01T00:00:00Z"` together with
+`exclude-newer-span = "P7D"` and the package-specific first-party
+exemptions. It does not freeze the policy into the wall-clock timestamp at
+which resolution occurred. The lock nevertheless fixes the selected
+package versions and artifact hashes for exact materialization. A future
+deliberate re-lock may advance eligible versions as the seven-day window
+advances. No additional dependency or source override is introduced by
+this policy.
 
 ### Rejected unguarded lock
 
@@ -259,6 +262,49 @@ PENDING EXECUTION (see "Deferred dependency locking and runtime
 materialization" below). No `uv.lock` is committed or fabricated in
 OH-001C.
 
+### Guarded lock-generation evidence
+
+After the freshness policy landed, the Human Steward generated a fresh
+guarded lock from canonical base
+`aedda94eb2b0c23db72f6cef5ba6fb08c6cb7aff` in a disposable detached
+worktree using lab-managed uv 0.12.0 and CPython 3.13.14.
+
+The generated artifact has SHA-256
+`5c32db8d8ee93f05005b8e180e25fafd47890e25aef915ecaebe75be1c303cd2`.
+`uv lock --check` passed. The universal lock contains 342 package records:
+341 PyPI-registry records and one virtual root. Inspection found no Git,
+direct-URL, editable, or local-path dependency sources. Downloadable
+artifacts are hash-recorded. Lock generation created no project-local
+environment, changed only `manifests/openhands/uv.lock` in the disposable
+worktree, and left canonical `main` untouched.
+
+Compared with the rejected unguarded lock
+(`41e00944c6103481682c12da0e0d104da9562374af7a6f526e2fabba8ef3cf79`),
+no package names were added or removed. The freshness policy changed 180
+version selections: 162 belong to macOS-only `pyobjc*` records in the
+universal lock, while 17 version changes are effective for Linux/Python
+3.13. The newest selected third-party artifact observed in the guarded
+lock is `starlette==1.6.0`, uploaded on 2026-08-08T18:27:57Z. The
+first-party `openhands-sdk==1.42.1` and `openhands-tools==1.42.1` remain
+selected through their explicit freshness exemptions.
+
+For Linux/Python 3.13, dependency traversal reaches the virtual root plus
+149 registry packages. Of those 149 registry packages, 148 have a
+compatible wheel in the lock; `func-timeout==4.3.5` is the sole
+sdist-only effective dependency and must be proven during materialization
+and standalone acceptance.
+
+`openhands-tools==1.42.1` also declares `browser-use` as an unconditional
+dependency. The resulting broad host dependency graph is therefore an
+intrinsic property of the published OpenHands tools package even though
+Agent Lab's initial exposed tool set remains limited to `TerminalTool` and
+`FileEditorTool`. This observation does not broaden Agent Lab's authorized
+tool surface.
+
+The guarded lock has been inspected and is acceptable for promotion, but
+at the time of this record it remains an externally generated candidate
+artifact: it is not yet committed, installed, or materialized.
+
 ## Deferred dependency locking and runtime materialization
 
 OH-001C records the dependency *input* only. Dependency locking and
@@ -272,11 +318,11 @@ mechanism that will later generate the lock is:
 writes `manifests/openhands/uv.lock` (a universal lock constrained to
 Python 3.13 by `requires-python`), using the lab-managed uv from
 `bootstrap/bootstrap.sh` (pinned in `bootstrap/versions.env`). Resolution
-runs under the "Supply-chain freshness policy (OH-001C)" guardrail above;
-`uv lock` persists the concrete resolved cutoff into the generated
-`uv.lock` while the committed source policy remains the relative 7-day
-rule. The generated `uv.lock` is a committed definition artifact and is
-kept next to the `pyproject.toml` under the definition tree.
+runs under the "Supply-chain freshness policy (OH-001C)" guardrail above.
+For the relative rule, uv preserves the seven-day span in the lock using
+its sentinel/span encoding while fixing the selected versions and artifact
+hashes. Once approved, the generated `uv.lock` is a committed definition
+artifact kept next to the `pyproject.toml` under the definition tree.
 
 The later materialization (sync) must keep runtime state OUT of the
 definition tree. uv defaults the project environment to `.venv` adjacent
@@ -290,7 +336,7 @@ consistent with existing runtime conventions (`$LAB_ROOT/runtime/...`):
 
     lab uv python install 3.13
     UV_PROJECT_ENVIRONMENT="$LAB_ROOT/runtime/openhands" \
-        lab uv sync --project "$LAB_DEFINITION_ROOT/manifests/openhands" --python 3.13
+        lab uv sync --locked --project "$LAB_DEFINITION_ROOT/manifests/openhands" --python 3.13
 
 The lock and the sync/materialization above are PENDING EXECUTION and are
 not performed in this stage. No lockfile or environment is committed or
