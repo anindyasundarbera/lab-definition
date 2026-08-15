@@ -1,0 +1,37 @@
+schema_version = 1
+
+# Component versions will be pinned only after each component passes
+# its Agent Lab acceptance test.
+
+[components.serena]
+enabled = false
+source = "github"
+repository = "oraios/serena"
+
+[components.openhands]
+enabled = false
+source = "github"
+repository = "OpenHands/OpenHands"
+
+[components.dagger]
+enabled = false
+source = "upstream"
+
+[components.mcp_agent]
+enabled = false
+source = "github"
+repository = "lastmile-ai/mcp-agent"
+
+[components.temporal]
+enabled = false
+source = "upstream"
+
+[components.container_use]
+enabled = false
+source = "github"
+repository = "dagger/container-use"
+
+[components.one_mcp]
+enabled = false
+source = "github"
+repository = "1mcp-app/agent"

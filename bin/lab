@@ -1,0 +1,115 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+# Resolve the real script location even when invoked through a symlink.
+SCRIPT_PATH="$(readlink -f "${BASH_SOURCE[0]}")"
+LAB_DEFINITION_ROOT="$(cd "$(dirname "$SCRIPT_PATH")/.." && pwd -P)"
+LAB_ROOT="$(cd "$LAB_DEFINITION_ROOT/.." && pwd -P)"
+
+export LAB_ROOT
+export LAB_DEFINITION_ROOT
+export LAB_COMPONENTS_ROOT="$LAB_ROOT/components"
+export LAB_CONTROL_PLANE_ROOT="$LAB_ROOT/control-plane"
+export LAB_DAGGER_ROOT="$LAB_ROOT/dagger"
+export LAB_PROJECTS_ROOT="$LAB_ROOT/projects"
+export LAB_CONFIG_ROOT="$LAB_ROOT/config"
+export LAB_STATE_ROOT="$LAB_ROOT/state"
+export LAB_WORKSPACES_ROOT="$LAB_ROOT/workspaces"
+export LAB_EVIDENCE_ROOT="$LAB_ROOT/evidence"
+export LAB_LOG_ROOT="$LAB_ROOT/logs"
+export LAB_SECRETS_ROOT="$LAB_ROOT/secrets"
+export LAB_TMP_ROOT="$LAB_ROOT/tmp"
+
+print_tool_status() {
+    local tool="$1"
+
+    if command -v "$tool" >/dev/null 2>&1; then
+        printf "  %-12s %s\n" "$tool" "FOUND ($(command -v "$tool"))"
+    else
+        printf "  %-12s %s\n" "$tool" "NOT INSTALLED"
+    fi
+}
+
+status() {
+    echo "Agent Lab"
+    echo "========="
+    echo
+    echo "Root:"
+    echo "  $LAB_ROOT"
+    echo
+
+    echo "Workspace directories:"
+    for dir in \
+        "$LAB_COMPONENTS_ROOT" \
+        "$LAB_CONTROL_PLANE_ROOT" \
+        "$LAB_DAGGER_ROOT" \
+        "$LAB_PROJECTS_ROOT" \
+        "$LAB_CONFIG_ROOT" \
+        "$LAB_STATE_ROOT" \
+        "$LAB_WORKSPACES_ROOT" \
+        "$LAB_EVIDENCE_ROOT" \
+        "$LAB_LOG_ROOT" \
+        "$LAB_SECRETS_ROOT" \
+        "$LAB_TMP_ROOT"
+    do
+        if [[ -d "$dir" ]]; then
+            printf "  [OK]      %s\n" "$dir"
+        else
+            printf "  [MISSING] %s\n" "$dir"
+        fi
+    done
+
+    echo
+
+    if [[ -d "$LAB_ROOT/.git" ]]; then
+        echo "Root Git repository:"
+        echo "  WARNING: agent-lab itself is a Git repository."
+    else
+        echo "Root Git repository:"
+        echo "  OK - agent-lab is not a Git repository."
+    fi
+
+    echo
+    echo "Tool availability:"
+    print_tool_status git
+    print_tool_status docker
+    print_tool_status python3
+    print_tool_status uv
+    print_tool_status node
+    print_tool_status npm
+    print_tool_status dagger
+}
+
+print_env() {
+    env | grep '^LAB_' | sort
+}
+
+usage() {
+    cat <<USAGE
+Usage:
+  lab status
+  lab env
+
+Commands:
+  status    Show workspace and dependency status
+  env       Show resolved LAB_* environment variables
+USAGE
+}
+
+case "${1:-status}" in
+    status)
+        status
+        ;;
+    env)
+        print_env
+        ;;
+    -h|--help|help)
+        usage
+        ;;
+    *)
+        echo "Unknown command: $1" >&2
+        echo >&2
+        usage >&2
+        exit 2
+        ;;
+esac

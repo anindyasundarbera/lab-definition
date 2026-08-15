@@ -1,0 +1,44 @@
+schema_version = 1
+
+[lab]
+name = "agent-lab"
+
+[portability]
+primary_execution_model = "oci-containers"
+host_runtimes_are_authoritative = false
+gpu_required = false
+
+[supported_hosts.linux_amd64]
+enabled = true
+status = "primary"
+
+[supported_hosts.linux_arm64]
+enabled = true
+status = "target"
+
+[supported_hosts.macos_arm64]
+enabled = true
+status = "target"
+
+[supported_hosts.macos_amd64]
+enabled = true
+status = "target"
+
+[supported_hosts.windows_wsl2_amd64]
+enabled = true
+status = "target"
+
+[runtimes.python]
+manager = "uv"
+system_python_authoritative = false
+
+[runtimes.node]
+system_node_authoritative = false
+
+[runtimes.containers]
+required = true
+preferred = "docker"
+compatible = ["docker", "podman"]
+
+[runtimes.gpu]
+required = false
