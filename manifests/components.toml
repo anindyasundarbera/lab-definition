@@ -25,6 +25,19 @@ commit = "167c1f924ac8a8acbeb0432bf9b1fcf77d5c2497"
 runtime = "python"
 python = "3.13"
 
+# OH-001B: immutable Agent Server artifact record. OpenHands remains
+# disabled/experimental; no install, pull, fetch, or runtime start is implied.
+# The runtime pin is the platform-specific manifest digest; the index digest
+# is retained as supply-chain/provenance evidence only. Runtime execution must
+# use agent_server_runtime_ref (digest-qualified), never the mutable tag alone.
+agent_server_image_tag = "ghcr.io/openhands/agent-server:167c1f9-python-amd64"
+agent_server_platform = "linux/amd64"
+agent_server_index_digest = "sha256:f8f9de91b57685384944346e263910b1648ca09ee6abef70ecbf406caece030f"
+agent_server_manifest_digest = "sha256:67d3b88984dd0537de78cf5a354898942d601b8fab9b633a655a4d57bed08d02"
+agent_server_runtime_ref = "ghcr.io/openhands/agent-server@sha256:67d3b88984dd0537de78cf5a354898942d601b8fab9b633a655a4d57bed08d02"
+# Observed attestation manifest digest; evidence only, NOT the runtime image pin.
+agent_server_attestation_digest = "sha256:a04dd37c5436d9f64c7db012167e010be1d3009775c625b7b5fab9ad97522186"
+
 [components.dagger]
 enabled = false
 source = "upstream"
