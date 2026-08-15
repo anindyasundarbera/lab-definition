@@ -5,10 +5,13 @@
 EXPERIMENTAL.
 
 OpenHands is recorded as a candidate Agent Lab component. It is not
-accepted, not baseline, and not installed as of stage OH-001A. This stage
-is provenance and definition only. No runtime, bootstrap, acceptance, or
-Serena behavior is modified. The manifest entry is `enabled = false` with
-`status = "experimental"`.
+accepted, not baseline, and not installed. As of stage OH-001A this record
+was provenance and definition only: no runtime, bootstrap, acceptance, or
+Serena behavior was modified. Stage OH-001B extends the record with an
+immutable Agent Server artifact pin while keeping the manifest `enabled =
+false` and `status = "experimental"`. OH-001B performs no installation,
+image pull, clone, fetch, bootstrap, acceptance, runtime start, or Serena
+integration. Image resolution is not acceptance.
 
 ## Provenance
 
@@ -33,12 +36,13 @@ checkout and a pinned runtime installation are independent concerns:
 - A later stage may install from the same release without re-deriving
   provenance, but installation is gated separately below.
 
-No source tree, clone, fetch, pull, or image pull is performed in OH-001A.
+Neither OH-001A nor OH-001B performs any source clone, fetch, pull, image
+pull, package install, or runtime start. Both stages are record-only.
 
 ## Planned host-side packages
 
-When runtime installation is later authorized in OH-001B, the planned
-host-side packages are exactly:
+When runtime installation is later authorized in OH-001C or later (a later
+runtime-materialization stage), the planned host-side packages are exactly:
 
 - `openhands-sdk==1.42.1`
 - `openhands-tools==1.42.1`
@@ -50,14 +54,84 @@ not host-installed because it must run in a release-matched container (see
 below). Floating `latest-python` tags are not permitted; all packages are
 release-pinned to `1.42.1`.
 
-## Agent Server image: hard gate for OH-001B
+## Agent Server image: OH-001B artifact record
 
-The Agent Server will later run in a release-matched Docker image pinned by
-an immutable OCI digest. That digest is intentionally unresolved in
-OH-001A. It must be resolved and recorded before any runtime installation
-or Agent Server start. No fake placeholder digest is inserted in the
-manifest or in this document. Resolving the digest is a hard gate for
-OH-001B.
+OH-001B resolves the previously unresolved Agent Server image digest. The
+image was observed via `docker buildx imagetools inspect` against the tag
+`ghcr.io/openhands/agent-server:167c1f9-python-amd64`. The tag prefix
+`167c1f9` corresponds to the recorded OpenHands source commit prefix from
+OH-001A (`167c1f924ac8a8acbeb0432bf9b1fcf77d5c2497`).
+
+Observed and recorded immutable metadata (mirrored in
+`manifests/components.toml` under `[components.openhands]`):
+
+- observed tag: `ghcr.io/openhands/agent-server:167c1f9-python-amd64`
+- platform: `linux/amd64`
+- OCI index media type: `application/vnd.oci.image.index.v1+json`
+- OCI index digest:
+  `sha256:f8f9de91b57685384944346e263910b1648ca09ee6abef70ecbf406caece030f`
+- concrete linux/amd64 image manifest digest (the runtime pin):
+  `sha256:67d3b88984dd0537de78cf5a354898942d601b8fab9b633a655a4d57bed08d02`
+- runtime reference (digest-qualified, the only runnable form):
+  `ghcr.io/openhands/agent-server@sha256:67d3b88984dd0537de78cf5a354898942d601b8fab9b633a655a4d57bed08d02`
+
+The runtime pin is the platform-specific manifest digest
+(`sha256:67d3b88...08d02`). The OCI index digest
+(`sha256:f8f9de9...030f`) is retained as supply-chain/provenance
+evidence; it is the OCI image index / top-level index envelope that
+contains one runnable `linux/amd64` image manifest plus an attestation
+manifest with platform `unknown/unknown`. It is not itself the runnable
+image, and must not be substituted for the concrete linux/amd64 manifest
+digest as the runtime pin.
+
+An attestation manifest digest was also observed:
+`sha256:a04dd37c5436d9f64c7db012167e010be1d3009775c625b7b5fab9ad97522186`.
+This is evidence only. It is not the runtime image and must not be mistaken
+for the runnable image. It is recorded in the manifest as
+`agent_server_attestation_digest` for traceability.
+
+Runtime execution, if ever later authorized, must use the digest-qualified
+runtime reference
+(`ghcr.io/openhands/agent-server@sha256:67d3b88...08d02`), never the
+mutable tag (`...:167c1f9-python-amd64`) alone. The mutable tag is recorded
+only as the observed resolution input; the digest is the authoritative pin.
+
+Resolving the image digest in OH-001B does NOT mean OpenHands is accepted
+or installed. OpenHands remains `enabled = false` and
+`status = "experimental"`. No image pull, runtime start, or acceptance
+execution is performed or implied by this record.
+
+## Pre-installation provenance gate
+
+Before any package installation or runtime materialization of OpenHands is
+authorized, the following independent proof must be completed (it is NOT
+claimed to be completed in this candidate):
+
+1. Prove that release tag `v1.42.1` dereferences to the exact source
+   commit `167c1f924ac8a8acbeb0432bf9b1fcf77d5c2497` recorded in OH-001A.
+   This must be verified independently of the artifact record above; the
+   tag-to-commit binding is a precondition, not a consequence, of the
+   artifact pin.
+2. Validate that the release-matched host package identities and versions
+   (`openhands-sdk==1.42.1`, `openhands-tools==1.42.1`) correspond to the
+   same release, with no floating versions or surrogate packages.
+
+This gate is a hard precondition for any OH-001C-or-later installation
+stage. Until it is satisfied, no host-side package install or Agent Server
+runtime materialization may proceed.
+
+## Deferred dependency locking and runtime materialization
+
+Dependency locking and runtime materialization are deferred to the next
+stage. When authorized, they must be performed with the lab-managed `uv`
+toolchain, not hand-authored. No transitive dependency lock is invented or
+hand-authored in OH-001B; no fabricated lockfile is committed. The
+lab-managed `uv` lock covers only the Python host package dependency graph
+derived from the release-pinned host packages above. The Agent Server
+digest is a separate immutable runtime artifact pin and must remain
+independently recorded and enforced; it is not an input to the Python
+dependency lock. Both are gated on the pre-installation provenance gate
+above passing.
 
 ## Docker execution boundary
 
