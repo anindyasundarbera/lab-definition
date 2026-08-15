@@ -20,8 +20,29 @@ resolve_script_path() {
 
 SCRIPT_PATH="$(resolve_script_path)"
 ACCEPTANCE_ROOT="$(cd "$(dirname "$SCRIPT_PATH")" && pwd -P)"
-LAB_DEFINITION_ROOT="$(cd "$ACCEPTANCE_ROOT/../.." && pwd -P)"
-LAB_ROOT="$(cd "$LAB_DEFINITION_ROOT/.." && pwd -P)"
+
+# Derive LAB_DEFINITION_ROOT from the acceptance script's location by default.
+# Respect an externally supplied value (exported by bin/lab) instead of
+# overwriting it.
+if [[ -n "${LAB_DEFINITION_ROOT:-}" ]]; then
+    LAB_DEFINITION_ROOT="$(cd "$LAB_DEFINITION_ROOT" && pwd -P)"
+else
+    LAB_DEFINITION_ROOT="$(cd "$ACCEPTANCE_ROOT/../.." && pwd -P)"
+fi
+
+# Derive LAB_ROOT from the definition parent by default. Respect an externally
+# supplied persistent root (exported by bin/lab) instead of clobbering it.
+if [[ -n "${LAB_ROOT:-}" ]]; then
+    LAB_ROOT="$(cd "$LAB_ROOT" && pwd -P)"
+else
+    LAB_ROOT="$(cd "$LAB_DEFINITION_ROOT/.." && pwd -P)"
+fi
+
+# Export the resolved roots so nested bin/lab subprocesses (invoked via
+# $LAB_BIN below) inherit the externally supplied roots and cannot re-derive a
+# conflicting LAB_ROOT.
+export LAB_DEFINITION_ROOT
+export LAB_ROOT
 
 LAB_BIN="$LAB_DEFINITION_ROOT/bin/lab"
 
