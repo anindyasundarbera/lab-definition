@@ -1,13 +1,30 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
-# Resolve the real script location even when invoked through a symlink.
-SCRIPT_PATH="$(readlink -f "${BASH_SOURCE[0]}")"
+resolve_script_path() {
+    local source="${BASH_SOURCE[0]}"
+    local dir
+
+    while [[ -h "$source" ]]; do
+        dir="$(cd -P "$(dirname "$source")" >/dev/null 2>&1 && pwd)"
+        source="$(readlink "$source")"
+
+        if [[ "$source" != /* ]]; then
+            source="$dir/$source"
+        fi
+    done
+
+    dir="$(cd -P "$(dirname "$source")" >/dev/null 2>&1 && pwd)"
+    printf '%s/%s\n' "$dir" "$(basename "$source")"
+}
+
+SCRIPT_PATH="$(resolve_script_path)"
 LAB_DEFINITION_ROOT="$(cd "$(dirname "$SCRIPT_PATH")/.." && pwd -P)"
 LAB_ROOT="$(cd "$LAB_DEFINITION_ROOT/.." && pwd -P)"
 
 export LAB_ROOT
 export LAB_DEFINITION_ROOT
+
 export LAB_COMPONENTS_ROOT="$LAB_ROOT/components"
 export LAB_CONTROL_PLANE_ROOT="$LAB_ROOT/control-plane"
 export LAB_DAGGER_ROOT="$LAB_ROOT/dagger"
@@ -19,6 +36,16 @@ export LAB_EVIDENCE_ROOT="$LAB_ROOT/evidence"
 export LAB_LOG_ROOT="$LAB_ROOT/logs"
 export LAB_SECRETS_ROOT="$LAB_ROOT/secrets"
 export LAB_TMP_ROOT="$LAB_ROOT/tmp"
+export LAB_RUNTIME_ROOT="$LAB_ROOT/runtime"
+
+# Lab-owned uv/runtime locations.
+export UV_PYTHON_INSTALL_DIR="$LAB_RUNTIME_ROOT/python"
+export UV_PYTHON_BIN_DIR="$LAB_RUNTIME_ROOT/bin"
+export UV_TOOL_DIR="$LAB_RUNTIME_ROOT/uv-tools"
+export UV_TOOL_BIN_DIR="$LAB_RUNTIME_ROOT/uv-tool-bin"
+export UV_CACHE_DIR="$LAB_RUNTIME_ROOT/cache/uv"
+
+LAB_UV="$LAB_RUNTIME_ROOT/bin/uv"
 
 print_tool_status() {
     local tool="$1"
@@ -30,12 +57,64 @@ print_tool_status() {
     fi
 }
 
+detect_host_profile() {
+    local kernel
+    local arch
+
+    kernel="$(uname -s)"
+    arch="$(uname -m)"
+
+    case "$arch" in
+        x86_64|amd64)
+            arch="amd64"
+            ;;
+        aarch64|arm64)
+            arch="arm64"
+            ;;
+        *)
+            printf 'unsupported_%s\n' "$arch"
+            return
+            ;;
+    esac
+
+    case "$kernel" in
+        Linux)
+            if grep -qi microsoft /proc/sys/kernel/osrelease 2>/dev/null ||
+               grep -qi microsoft /proc/version 2>/dev/null; then
+                printf 'windows_wsl2_%s\n' "$arch"
+            else
+                printf 'linux_%s\n' "$arch"
+            fi
+            ;;
+        Darwin)
+            printf 'macos_%s\n' "$arch"
+            ;;
+        *)
+            printf 'unsupported_%s_%s\n' "$kernel" "$arch"
+            ;;
+    esac
+}
+
+profile_supported() {
+    case "$1" in
+        linux_amd64|linux_arm64|macos_amd64|macos_arm64|windows_wsl2_amd64)
+            return 0
+            ;;
+        *)
+            return 1
+            ;;
+    esac
+}
+
 status() {
     echo "Agent Lab"
     echo "========="
     echo
     echo "Root:"
     echo "  $LAB_ROOT"
+    echo
+    echo "Definition:"
+    echo "  $LAB_DEFINITION_ROOT"
     echo
 
     echo "Workspace directories:"
@@ -50,7 +129,8 @@ status() {
         "$LAB_EVIDENCE_ROOT" \
         "$LAB_LOG_ROOT" \
         "$LAB_SECRETS_ROOT" \
-        "$LAB_TMP_ROOT"
+        "$LAB_TMP_ROOT" \
+        "$LAB_RUNTIME_ROOT"
     do
         if [[ -d "$dir" ]]; then
             printf "  [OK]      %s\n" "$dir"
@@ -70,29 +150,274 @@ status() {
     fi
 
     echo
+    echo "Host profile:"
+    echo "  $(detect_host_profile)"
+
+    echo
     echo "Tool availability:"
     print_tool_status git
     print_tool_status docker
-    print_tool_status python3
-    print_tool_status uv
-    print_tool_status node
-    print_tool_status npm
+    print_tool_status podman
+    print_tool_status curl
+    print_tool_status wget
+
+    if [[ -x "$LAB_UV" ]]; then
+        printf "  %-12s %s\n" "lab uv" "FOUND ($LAB_UV)"
+    else
+        printf "  %-12s %s\n" "lab uv" "NOT BOOTSTRAPPED"
+    fi
+
     print_tool_status dagger
 }
 
 print_env() {
-    env | grep '^LAB_' | sort
+    env | grep -E '^(LAB_|UV_)' | sort
+}
+
+doctor_pass() {
+    printf "  [PASS] %s\n" "$1"
+}
+
+doctor_warn() {
+    printf "  [WARN] %s\n" "$1"
+}
+
+doctor_fail() {
+    printf "  [FAIL] %s\n" "$1"
+    DOCTOR_FAILURES=$((DOCTOR_FAILURES + 1))
+}
+
+doctor() {
+    local profile
+    local runtime=""
+
+    DOCTOR_FAILURES=0
+    profile="$(detect_host_profile)"
+
+    echo "Agent Lab Doctor"
+    echo "================"
+    echo
+
+    echo "Host"
+    echo "----"
+
+    if profile_supported "$profile"; then
+        doctor_pass "Supported host profile: $profile"
+    else
+        doctor_fail "Unsupported host profile: $profile"
+    fi
+
+    doctor_pass "Kernel: $(uname -s) $(uname -r)"
+    doctor_pass "Architecture: $(uname -m)"
+
+    echo
+    echo "Workspace"
+    echo "---------"
+
+    if [[ -d "$LAB_ROOT" ]]; then
+        doctor_pass "LAB_ROOT exists: $LAB_ROOT"
+    else
+        doctor_fail "LAB_ROOT does not exist: $LAB_ROOT"
+    fi
+
+    if [[ -d "$LAB_DEFINITION_ROOT/.git" ]]; then
+        doctor_pass "Lab definition is a Git repository"
+    else
+        doctor_warn "Lab definition is not currently a Git repository"
+    fi
+
+    if [[ -d "$LAB_ROOT/.git" ]]; then
+        doctor_fail "Workspace root must not be a Git repository"
+    else
+        doctor_pass "Workspace root is not a Git repository"
+    fi
+
+    for dir in \
+        components \
+        control-plane \
+        dagger \
+        projects \
+        config \
+        state \
+        workspaces \
+        evidence \
+        logs \
+        secrets \
+        tmp \
+        runtime
+    do
+        if [[ -d "$LAB_ROOT/$dir" ]]; then
+            doctor_pass "Directory exists: $dir/"
+        else
+            doctor_fail "Missing workspace directory: $dir/"
+        fi
+    done
+
+    echo
+    echo "Bootstrap prerequisites"
+    echo "-----------------------"
+
+    if command -v bash >/dev/null 2>&1; then
+        doctor_pass "Bash: $(bash --version | head -n 1)"
+    else
+        doctor_fail "Bash is required"
+    fi
+
+    if command -v git >/dev/null 2>&1; then
+        doctor_pass "Git: $(git --version)"
+    else
+        doctor_fail "Git is required"
+    fi
+
+    if command -v curl >/dev/null 2>&1; then
+        doctor_pass "Downloader: curl"
+    elif command -v wget >/dev/null 2>&1; then
+        doctor_pass "Downloader: wget"
+    else
+        doctor_fail "curl or wget is required for bootstrap"
+    fi
+
+    echo
+    echo "Container runtime"
+    echo "-----------------"
+
+    if command -v docker >/dev/null 2>&1; then
+        runtime="docker"
+
+        if docker info >/dev/null 2>&1; then
+            doctor_pass "Docker daemon is reachable"
+        else
+            doctor_fail "Docker CLI exists but daemon is not reachable"
+        fi
+    elif command -v podman >/dev/null 2>&1; then
+        runtime="podman"
+
+        if podman info >/dev/null 2>&1; then
+            doctor_pass "Podman runtime is reachable"
+        else
+            doctor_fail "Podman exists but runtime is not reachable"
+        fi
+    else
+        doctor_fail "No supported OCI runtime found (Docker or Podman)"
+    fi
+
+    if [[ -n "$runtime" ]]; then
+        doctor_pass "Selected OCI runtime: $runtime"
+    fi
+
+    echo
+    echo "Lab-managed toolchain"
+    echo "---------------------"
+
+    if [[ -x "$LAB_UV" ]]; then
+        doctor_pass "Lab-managed uv: $("$LAB_UV" --version)"
+        doctor_pass "uv binary: $LAB_UV"
+    else
+        doctor_warn "Lab-managed uv is not installed yet; bootstrap can install it"
+    fi
+
+    if command -v uv >/dev/null 2>&1; then
+        doctor_warn "Host uv detected at $(command -v uv); it is not authoritative"
+    else
+        doctor_pass "No host uv dependency detected"
+    fi
+
+    if command -v python3 >/dev/null 2>&1; then
+        doctor_warn "Host Python detected ($(python3 --version 2>&1)); it is not authoritative"
+    else
+        doctor_pass "No host Python dependency"
+    fi
+
+    if command -v node >/dev/null 2>&1; then
+        doctor_warn "Host Node detected ($(node --version)); it is not authoritative"
+    else
+        doctor_pass "No host Node dependency"
+    fi
+
+    echo
+    echo "Capacity"
+    echo "--------"
+
+    if command -v df >/dev/null 2>&1; then
+        local available_kb
+        available_kb="$(df -Pk "$LAB_ROOT" | awk 'NR==2 {print $4}')"
+
+        if [[ "$available_kb" =~ ^[0-9]+$ ]]; then
+            local available_gb=$((available_kb / 1024 / 1024))
+
+            if (( available_gb >= 30 )); then
+                doctor_pass "Free workspace disk: ~${available_gb} GiB"
+            elif (( available_gb >= 10 )); then
+                doctor_warn "Free workspace disk is only ~${available_gb} GiB"
+            else
+                doctor_fail "Free workspace disk is too low: ~${available_gb} GiB"
+            fi
+        fi
+    fi
+
+    if [[ "$(uname -s)" == "Linux" && -r /proc/meminfo ]]; then
+        local memory_kb
+        memory_kb="$(awk '/MemTotal:/ {print $2}' /proc/meminfo)"
+        local memory_gb=$((memory_kb / 1024 / 1024))
+
+        if (( memory_gb >= 8 )); then
+            doctor_pass "System RAM: ~${memory_gb} GiB"
+        elif (( memory_gb >= 4 )); then
+            doctor_warn "System RAM is limited: ~${memory_gb} GiB"
+        else
+            doctor_fail "System RAM is below 4 GiB"
+        fi
+    elif [[ "$(uname -s)" == "Darwin" ]] && command -v sysctl >/dev/null 2>&1; then
+        local memory_bytes
+        memory_bytes="$(sysctl -n hw.memsize)"
+        local memory_gb=$((memory_bytes / 1024 / 1024 / 1024))
+
+        if (( memory_gb >= 8 )); then
+            doctor_pass "System RAM: ~${memory_gb} GiB"
+        elif (( memory_gb >= 4 )); then
+            doctor_warn "System RAM is limited: ~${memory_gb} GiB"
+        else
+            doctor_fail "System RAM is below 4 GiB"
+        fi
+    fi
+
+    echo
+    echo "Result"
+    echo "------"
+
+    if (( DOCTOR_FAILURES == 0 )); then
+        echo "READY: no blocking host problems detected."
+        echo "Warnings may describe reconstructible or non-authoritative host tools."
+        return 0
+    fi
+
+    echo "NOT READY: $DOCTOR_FAILURES blocking problem(s) detected."
+    return 1
+}
+
+lab_uv() {
+    if [[ ! -x "$LAB_UV" ]]; then
+        echo "Lab-managed uv is not installed." >&2
+        echo "Run: $LAB_DEFINITION_ROOT/bootstrap/bootstrap.sh" >&2
+        exit 1
+    fi
+
+    exec "$LAB_UV" "$@"
 }
 
 usage() {
     cat <<USAGE
 Usage:
   lab status
+  lab doctor
   lab env
+  lab uv <args>
 
 Commands:
-  status    Show workspace and dependency status
-  env       Show resolved LAB_* environment variables
+  status    Show workspace and tool status
+  doctor    Validate host and Agent Lab prerequisites
+  env       Show resolved LAB_* and UV_* environment variables
+  uv        Run the lab-managed uv executable
 USAGE
 }
 
@@ -100,8 +425,15 @@ case "${1:-status}" in
     status)
         status
         ;;
+    doctor)
+        doctor
+        ;;
     env)
         print_env
+        ;;
+    uv)
+        shift
+        lab_uv "$@"
         ;;
     -h|--help|help)
         usage
