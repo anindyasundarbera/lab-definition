@@ -33,3 +33,13 @@ dependencies = [
 
 [tool.uv]
 package = false
+# Supply-chain freshness policy (OH-001C), matching the upstream
+# OpenHands repository policy. Third-party transitive resolutions are
+# deferred by a 7-day freshness cooldown (exclude-newer). The two direct
+# host inputs are explicitly release-pinned and provenance-verified
+# (see docs/COMPONENT-OPENHANDS.md), so they are exempt from the delay.
+# The committed policy is the relative 7-day rule; the lab-managed uv
+# lock (generated later) persists the concrete resolved cutoff into
+# uv.lock. No uv.lock is committed in this stage.
+exclude-newer = "7 days"
+exclude-newer-package = { "openhands-sdk" = false, "openhands-tools" = false }
