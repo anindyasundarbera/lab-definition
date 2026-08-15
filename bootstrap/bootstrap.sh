@@ -20,8 +20,22 @@ resolve_script_path() {
 
 SCRIPT_PATH="$(resolve_script_path)"
 BOOTSTRAP_ROOT="$(cd "$(dirname "$SCRIPT_PATH")" && pwd -P)"
-LAB_DEFINITION_ROOT="$(cd "$BOOTSTRAP_ROOT/.." && pwd -P)"
-LAB_ROOT="$(cd "$LAB_DEFINITION_ROOT/.." && pwd -P)"
+
+# Derive LAB_DEFINITION_ROOT from the bootstrap script's location by default.
+# Respect an externally supplied value instead of overwriting it.
+if [[ -n "${LAB_DEFINITION_ROOT:-}" ]]; then
+    LAB_DEFINITION_ROOT="$(cd "$LAB_DEFINITION_ROOT" && pwd -P)"
+else
+    LAB_DEFINITION_ROOT="$(cd "$BOOTSTRAP_ROOT/.." && pwd -P)"
+fi
+
+# Derive LAB_ROOT from the definition parent by default. Respect an externally
+# supplied persistent root instead of clobbering it.
+if [[ -n "${LAB_ROOT:-}" ]]; then
+    LAB_ROOT="$(cd "$LAB_ROOT" && pwd -P)"
+else
+    LAB_ROOT="$(cd "$LAB_DEFINITION_ROOT/.." && pwd -P)"
+fi
 
 # shellcheck source=/dev/null
 source "$BOOTSTRAP_ROOT/versions.env"
@@ -41,6 +55,7 @@ mkdir -p \
     "$LAB_ROOT/logs" \
     "$LAB_ROOT/secrets" \
     "$LAB_ROOT/tmp" \
+    "$LAB_ROOT/scripts" \
     "$LAB_RUNTIME_ROOT/bin" \
     "$LAB_RUNTIME_ROOT/python" \
     "$LAB_RUNTIME_ROOT/uv-tools" \
@@ -111,7 +126,10 @@ if [[ "$ACTUAL_UV_VERSION" != "$LAB_UV_VERSION" ]]; then
 fi
 
 # Keep the convenience workspace launcher available.
-ln -sfn ../lab-definition/bin/lab "$LAB_ROOT/scripts/lab"
+# Target the resolved definition root so a detached candidate checkout (where
+# the definition does not live in a sibling "lab-definition" directory) still
+# links to the correct bin/lab.
+ln -sfn "$LAB_DEFINITION_ROOT/bin/lab" "$LAB_ROOT/scripts/lab"
 
 echo
 echo "Bootstrap toolchain:"

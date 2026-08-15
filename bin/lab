@@ -19,8 +19,24 @@ resolve_script_path() {
 }
 
 SCRIPT_PATH="$(resolve_script_path)"
-LAB_DEFINITION_ROOT="$(cd "$(dirname "$SCRIPT_PATH")/.." && pwd -P)"
-LAB_ROOT="$(cd "$LAB_DEFINITION_ROOT/.." && pwd -P)"
+
+# Derive LAB_DEFINITION_ROOT from this script's own path by default, so the
+# canonical invocation is unchanged. Respect an externally supplied value
+# (e.g. a detached candidate definition checkout) instead of overwriting it.
+if [[ -n "${LAB_DEFINITION_ROOT:-}" ]]; then
+    LAB_DEFINITION_ROOT="$(cd "$LAB_DEFINITION_ROOT" && pwd -P)"
+else
+    LAB_DEFINITION_ROOT="$(cd "$(dirname "$SCRIPT_PATH")/.." && pwd -P)"
+fi
+
+# Derive LAB_ROOT from the definition parent by default. Respect an externally
+# supplied persistent root (e.g. a bridge-supplied agent-lab root) instead of
+# clobbering it.
+if [[ -n "${LAB_ROOT:-}" ]]; then
+    LAB_ROOT="$(cd "$LAB_ROOT" && pwd -P)"
+else
+    LAB_ROOT="$(cd "$LAB_DEFINITION_ROOT/.." && pwd -P)"
+fi
 
 export LAB_ROOT
 export LAB_DEFINITION_ROOT
@@ -225,7 +241,9 @@ doctor() {
         doctor_fail "LAB_ROOT does not exist: $LAB_ROOT"
     fi
 
-    if [[ -d "$LAB_DEFINITION_ROOT/.git" ]]; then
+    # A definition checkout may be a normal clone (.git directory) or a Git
+    # worktree (.git file). Use git itself so both forms are recognized.
+    if git -C "$LAB_DEFINITION_ROOT" rev-parse --git-dir >/dev/null 2>&1; then
         doctor_pass "Lab definition is a Git repository"
     else
         doctor_warn "Lab definition is not currently a Git repository"
