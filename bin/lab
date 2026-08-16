@@ -451,6 +451,9 @@ lab_test() {
         serena)
             exec "$LAB_DEFINITION_ROOT/acceptance/serena/run.sh"
             ;;
+        openhands-lifecycle)
+            exec bash "$LAB_DEFINITION_ROOT/scripts/test-openhands-lifecycle.sh"
+            ;;
         "")
             echo "Usage: lab test <component>" >&2
             exit 2
@@ -462,6 +465,13 @@ lab_test() {
     esac
 }
 
+# OpenHands Agent Server lifecycle adapter (OH-001D Stage 5). The adapter owns
+# the disposable candidate workspace -> container lifecycle and the Agent Lab
+# isolation boundary. See docs/COMPONENT-OPENHANDS.md.
+lab_openhands() {
+    exec bash "$LAB_DEFINITION_ROOT/scripts/openhands-lifecycle.sh" "$@"
+}
+
 usage() {
     cat <<USAGE
 Usage:
@@ -470,6 +480,8 @@ Usage:
   lab env
   lab uv <args>
   lab serena <args>
+  lab openhands <command> [args]
+  lab test <component>
 
 Commands:
   status    Show workspace and tool status
@@ -477,6 +489,13 @@ Commands:
   env       Show resolved LAB_*, UV_*, and component environment variables
   uv        Run the lab-managed uv executable
   serena    Run the lab-managed Serena executable
+  openhands Manage the OpenHands Agent Server lifecycle:
+              openhands start <workspace-path>
+              openhands status
+              openhands stop
+  test      Run a component acceptance test:
+              test serena
+              test openhands-lifecycle
 USAGE
 }
 
@@ -501,6 +520,10 @@ case "${1:-status}" in
     test)
         shift
         lab_test "$@"
+        ;;
+    openhands)
+        shift
+        lab_openhands "$@"
         ;;
     -h|--help|help)
         usage
