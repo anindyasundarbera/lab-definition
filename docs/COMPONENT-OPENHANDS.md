@@ -5,8 +5,11 @@
 EXPERIMENTAL.
 
 OpenHands is recorded as a candidate Agent Lab component. It is not
-accepted, not baseline, and not installed. As of stage OH-001A this record
-was provenance and definition only: no runtime, bootstrap, acceptance, or
+accepted, not baseline, and not enabled. The host-side OpenHands SDK/tools
+runtime has been materialized under OH-001D Stage 2 (outside this
+definition repo), but the Agent Server/container runtime has not been
+pulled, started, or accepted. As of stage OH-001A this record was
+provenance and definition only: no runtime, bootstrap, acceptance, or
 Serena behavior was modified. Stage OH-001B extends the record with an
 immutable Agent Server artifact pin while keeping the manifest `enabled =
 false` and `status = "experimental"`. OH-001B performs no installation,
@@ -19,9 +22,10 @@ adds the minimal lab-owned Python dependency input
 OpenHands third-party freshness guardrail (`exclude-newer = "7 days"` with
 the two first-party packages exempt; see "Supply-chain freshness policy
 (OH-001C)" below) and records the rejection of a previously generated
-unguarded lock. OH-001C performs no installation, no transitive lock
-generation, no image pull, no clone/fetch, no bootstrap, no acceptance, no
-runtime start, and no Serena integration. The provenance evidence recorded
+unguarded lock. OH-001C performs no installation, no image pull, no
+clone/fetch, no bootstrap, no acceptance, no runtime start, and no Serena
+integration; it adds the dependency input and the committed guarded
+transitive lock. The provenance evidence recorded
 in OH-001C was observed by the Human Steward via a read-only upstream probe
 on 2026-08-15; it is authoritative input for this candidate but was NOT
 independently re-verified by Agent Lab, which has no network/clone
@@ -51,9 +55,11 @@ checkout and a pinned runtime installation are independent concerns:
 - A later stage may install from the same release without re-deriving
   provenance, but installation is gated separately below.
 
-Neither OH-001A, OH-001B, nor OH-001C performs any source clone, fetch,
-pull, image pull, package install, transitive lock generation, or runtime
-start. All three stages are record-only.
+Neither OH-001A nor OH-001B performs any source clone, fetch, pull, image
+pull, package install, transitive lock generation, or runtime start; both
+are record-only. OH-001C adds the dependency input and the committed
+guarded transitive lock but performs no source clone, fetch, pull, image
+pull, package install, or runtime start.
 
 ## Planned host-side packages
 
@@ -211,10 +217,13 @@ consumed by the lab-managed `uv`. It declares exactly:
 - the two direct, release-pinned host packages
   `openhands-sdk==1.42.1` and `openhands-tools==1.42.1`.
 
-No transitive dependencies are hand-authored and no `uv.lock` is committed
-or fabricated. No container reference appears in this file; the Agent
-Server digest remains a separate pin in `manifests/components.toml` and is
-never an input to the Python dependency lock.
+No transitive dependencies are hand-authored. A guarded `uv.lock` is
+committed next to this input and is authoritative for host materialization
+(see "Guarded lock-generation evidence" and "OH-001D build-constraint
+hardening and host materialization" below). No container reference appears
+in this file; the Agent Server digest remains a separate pin in
+`manifests/components.toml` and is never an input to the Python dependency
+lock.
 
 ### Supply-chain freshness policy (OH-001C)
 
@@ -256,11 +265,9 @@ showed multiple third-party transitives were less than 7 days old at
 resolution time, including some only hours old. That generated lock is
 explicitly REJECTED: it is not authoritative, must not be imported or
 committed, and must not be recreated in this stage. It was generated
-without the freshness guardrail above. A fresh lab-managed `uv` lock must
-be generated only after this supply-chain policy lands, and remains
-PENDING EXECUTION (see "Deferred dependency locking and runtime
-materialization" below). No `uv.lock` is committed or fabricated in
-OH-001C.
+without the freshness guardrail above. A fresh lab-managed `uv` lock was
+subsequently generated under the freshness policy and committed; see
+"Guarded lock-generation evidence" below.
 
 ### Guarded lock-generation evidence
 
@@ -301,16 +308,19 @@ Agent Lab's initial exposed tool set remains limited to `TerminalTool` and
 `FileEditorTool`. This observation does not broaden Agent Lab's authorized
 tool surface.
 
-The guarded lock has been inspected and is acceptable for promotion, but
-at the time of this record it remains an externally generated candidate
-artifact: it is not yet committed, installed, or materialized.
+The guarded lock was inspected, accepted, and committed next to the
+`pyproject.toml` (canonical commit `9f41884`, "build: lock OpenHands host
+dependencies"). Its committed SHA-256 is
+`5c32db8d8ee93f05005b8e180e25fafd47890e25aef915ecaebe75be1c303cd2`. Host
+materialization was later performed under OH-001D; see "OH-001D
+build-constraint hardening and host materialization" below.
 
 ## Deferred dependency locking and runtime materialization
 
-OH-001C records the dependency *input* only. Dependency locking and
-runtime materialization remain deferred and must be performed with the
-lab-managed `uv` toolchain, not hand-authored. The deterministic lab
-mechanism that will later generate the lock is:
+OH-001C records the dependency *input* and the committed guarded lock.
+Dependency locking and runtime materialization are performed with the
+lab-managed `uv` toolchain, never hand-authored. The deterministic lab
+mechanism for generating or re-locking is:
 
     lab uv lock --project "$LAB_DEFINITION_ROOT/manifests/openhands"
 
@@ -338,17 +348,87 @@ consistent with existing runtime conventions (`$LAB_ROOT/runtime/...`):
     UV_PROJECT_ENVIRONMENT="$LAB_ROOT/runtime/openhands" \
         lab uv sync --locked --project "$LAB_DEFINITION_ROOT/manifests/openhands" --python 3.13
 
-The lock and the sync/materialization above are PENDING EXECUTION and are
-not performed in this stage. No lockfile or environment is committed or
-created in this candidate.
+The guarded lock is committed, and host materialization was performed
+under OH-001D Stage 2 with `UV_PROJECT_ENVIRONMENT` kept outside the
+definition tree (see "OH-001D build-constraint hardening and host
+materialization" below). The commands above remain the reference for
+deliberate future relocks and re-materialization.
 
 The lab-managed `uv` lock covers only the Python host package dependency
 graph derived from the release-pinned host packages above. The Agent
 Server digest is a separate immutable runtime artifact pin and must remain
 independently recorded and enforced; it is not an input to the Python
-dependency lock. Runtime materialization remains gated on the
-pre-installation provenance gate above being closed and on separate
-Steward authorization.
+dependency lock. Runtime materialization was Steward-authorized and performed under OH-001D
+(see "OH-001D build-constraint hardening and host materialization" below);
+any further runtime execution remains separately gated. The
+pre-installation provenance gate above is closed (OH-001C).
+
+## OH-001D build-constraint hardening and host materialization
+
+OH-001D hardens the committed guarded lock with a build-time constraint and
+performs the first host runtime materialization of the OpenHands candidate,
+all on canonical base `7cdd114b86687e8d8bd2f4ee85b70412c6a8dcd3`. OpenHands
+remains `enabled = false` and `status = "experimental"`; this stage is
+host-side dependency hardening and smoke only. It is NOT standalone
+OpenHands acceptance and NOT Agent Server/container acceptance.
+
+### Stage 1: baseline
+
+Stage 1 baseline passed on canonical
+`7cdd114b86687e8d8bd2f4ee85b70412c6a8dcd3` against the committed guarded
+lock (SHA-256
+`5c32db8d8ee93f05005b8e180e25fafd47890e25aef915ecaebe75be1c303cd2`).
+
+### Stage 2: host materialization and sdist build evidence
+
+Stage 2 materialized the host runtime *outside* the definition repo under
+Agent Lab-managed CPython 3.13.14 and uv 0.12.0 using `--locked`. Exact
+installed versions:
+
+- `openhands-sdk==1.42.1`
+- `openhands-tools==1.42.1`
+- `func-timeout==4.3.5`
+
+`func-timeout==4.3.5` is sdist-only in the guarded graph (no compatible
+wheel). A fresh no-cache isolated PEP 517 build resolved
+`setuptools>=40.8.0` to `setuptools==84.0.0` and built successfully.
+
+### Stage 3: host-only SDK/tool smoke
+
+Stage 3 host-only SDK/tool smoke passed. The authorized external tool
+specification is exactly `terminal` and `file_editor`. No LLM,
+Conversation, executor, Agent Server, or provider was invoked.
+
+### Build-constraint hardening
+
+A disposable uv 0.12.0 probe proved that adding
+`build-constraint-dependencies = ["setuptools==84.0.0"]` to
+`manifests/openhands/pyproject.toml` makes the prior guarded lock stale,
+constrains the fresh `func-timeout` build to `setuptools==84.0.0`,
+preserves the exact OpenHands runtime versions
+(`openhands-sdk==1.42.1`, `openhands-tools==1.42.1`, `func-timeout==4.3.5`),
+and requires only the three-line `[manifest]` lock delta:
+
+    [manifest]
+    build-constraints = [{ name = "setuptools", specifier = "==84.0.0" }]
+
+The constraint is build-time only; it does not add `setuptools` as a runtime
+or direct dependency and does not broaden the installed dependency graph.
+After applying that exact lab-generated delta to the committed guarded lock,
+the new guarded lock SHA-256 is
+`a171282a9a00821e63196f66f4a434e45a68e586c68494c790028b05ca25c66b`.
+
+The disposable probe evidence log is
+`$LAB_ROOT/evidence/openhands/oh-001d/build-constraint-probe-20260816T031653Z.log`
+(SHA-256
+`d50f64e6983690eb607edb31ae504e07837b94c22f7528cabb108dc942be2c95`).
+
+### Status after OH-001D
+
+The guarded lock is committed and authoritative for host materialization;
+the relative 7-day freshness rule remains the policy for deliberate future
+relocks. OpenHands remains experimental/disabled. Standalone OpenHands
+acceptance and Agent Server/container acceptance are NOT yet complete.
 
 ## Docker execution boundary
 

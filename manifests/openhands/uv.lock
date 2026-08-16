@@ -10,6 +10,9 @@ exclude-newer-span = "P7D"
 openhands-tools = false
 openhands-sdk = false
 
+[manifest]
+build-constraints = [{ name = "setuptools", specifier = "==84.0.0" }]
+
 [[package]]
 name = "agent-client-protocol"
 version = "0.12.0"
