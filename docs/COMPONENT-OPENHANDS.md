@@ -8,8 +8,11 @@ OpenHands is recorded as a candidate Agent Lab component. It is not
 accepted, not baseline, and not enabled. The host-side OpenHands SDK/tools
 runtime has been materialized under OH-001D Stage 2 (outside this
 definition repo). Under OH-001D Stage 4 the exact immutable Agent Server
-image was pulled and locally verified, but no Agent Server container has
-yet been started or accepted. As of stage OH-001A this record was
+image was pulled and locally verified; Stage 4 itself started no Agent
+Server container. Subsequent Stage 5 failed acceptance/diagnostic/proof
+probes did start disposable Agent Server containers outside this definition
+repo, but no Agent Server/container acceptance has passed. As of stage
+OH-001A this record was
 provenance and definition only: no runtime, bootstrap, acceptance, or
 Serena behavior was modified. Stage OH-001B extends the record with an
 immutable Agent Server artifact pin while keeping the manifest `enabled =
@@ -449,8 +452,10 @@ via `bin/lab`) and its lifecycle acceptance script
 openhands-lifecycle`). The adapter enforces the Agent Lab isolation boundary:
 
 - immutable digest-qualified image ref only (no mutable tag);
-- `--pull never`, `--platform linux/amd64`, baked entrypoint/user (never
-  overridden), `--security-opt no-new-privileges:true`, `--cap-drop ALL`,
+- `--pull never`, `--platform linux/amd64`, baked entrypoint/cmd (never
+  overridden; the baked image user IS intentionally overridden by Agent Lab
+  host UID/GID mapping — see "Stage 5 lifecycle correction" below),
+  `--security-opt no-new-privileges:true`, `--cap-drop ALL`,
   `-e OH_ENABLE_VNC=false`;
 - exactly one bind mount of an approved workspace to `/workspace` (rw);
 - loopback-only dynamic port binding (`127.0.0.1::<dynamic>:8000`); port
@@ -475,29 +480,37 @@ openhands-lifecycle`). The adapter enforces the Agent Lab isolation boundary:
   `$LAB_ROOT/state/openhands` and are cleared on stop; all secrets are never
   printed;
 - state dir `$LAB_ROOT/state/openhands` mode `0700`; credentials file mode
-  `0600`; container identity/name, workspace, dynamic host port/url, and
-  immutable image ref/id are stored as non-executable parsed data and never
-  `source`d;
+  `0600`; container identity/name, workspace, dynamic host port/url, immutable
+  image ref/id, and the mapped host uid/gid are stored as non-executable
+  parsed data and never `source`d;
 - one active managed server with mandatory ownership labels; stop/remove
   verify labels + recorded container id before any destructive action; stop
   is idempotent, requires successful graceful stop/remove, and never deletes
   the workspace or the persistent `OH_SECRET_KEY`.
 
 The Stage 5 image-contract preflight recorded the baked image contract that
-the adapter relies on (the adapter overrides none of these): Entrypoint
-`["tini","--","/usr/local/bin/openhands-agent-server"]`; Cmd null; User
-`openhands`; WorkingDir `/`; ports `8000/tcp` and `8002/tcp` exposed; no
-`Volumes`; no `Healthcheck`. Preflight evidence is captured in
+the adapter relies on (the adapter overrides neither the entrypoint nor the
+cmd; the baked image User IS intentionally overridden by Agent Lab host
+UID/GID mapping — see "Stage 5 lifecycle correction" below): Entrypoint
+`["tini","--","/usr/local/bin/openhands-agent-server"]`; Cmd null; baked
+User `openhands` (uid 10001, overridden at runtime); WorkingDir `/`; ports
+`8000/tcp` and `8002/tcp` exposed; no `Volumes`; no `Healthcheck`. Preflight
+evidence is captured in
 `$LAB_ROOT/evidence/openhands/oh-001d/stage5-image-contract-preflight-20260816T034737Z.log`
 (SHA-256
 `e23822a2d3a7be865b6fccc9f9fe12c9efc0a81bcf8417197095c1452f1bc5fb`).
 
-Stage 5 implements the lifecycle adapter and acceptance script but does NOT
-execute Docker/runtime in the definition repo. Lifecycle acceptance is
-pending post-merge host acceptance (the adapter must be exercised on a host
-with the immutable image present and the Docker daemon reachable).
-OpenHands remains `enabled = false` and `status = "experimental"`; Stage 5
-is implementation only and does not claim lifecycle acceptance passed.
+Stage 5 implements the lifecycle adapter and acceptance script; the
+implementation/development of the adapter itself does NOT execute
+Docker/runtime in the definition repo. Post-merge host acceptance and
+diagnostics did execute disposable Agent Server runtime outside the
+definition repository (see "Stage 5 lifecycle correction" below), but that
+runtime activity is disposable proof/diagnostic only and is not acceptance.
+Corrected lifecycle acceptance remains pending post-merge host acceptance
+(the adapter must be exercised on a host with the immutable image present
+and the Docker daemon reachable). OpenHands remains `enabled = false` and
+`status = "experimental"`; Stage 5 is implementation only and does not claim
+lifecycle acceptance passed.
 
 Secrets (`SESSION_API_KEY`, `OH_SECRET_KEY`) are passed to the container as
 environment via Docker `--env-file`; they are never committed, never printed
@@ -512,14 +525,74 @@ atomic `mkdir`-based state-directory lock (`$OH_STATE_DIR/start.lock`) so
 concurrent `lab openhands start` invocations cannot corrupt each other's
 state/credentials; a losing start fails without touching the winner's state.
 
+### Stage 5 lifecycle correction (host UID/GID mapping)
+
+The first Stage 5 host acceptance run is REJECTED, not accepted. Its inner
+acceptance correctly emitted FAIL, but the outer acceptance wrapper falsely
+printed a PASS marker after the inner FAIL; that outer PASS is invalid and
+must not be treated as acceptance. The rejected wrapper evidence is
+`$LAB_ROOT/evidence/openhands/oh-001d/stage5-lifecycle-acceptance-20260816T044232Z.log`
+(SHA-256
+`6acab2394ae8e365d6b2764c4dc7a21da80531113bcf0ebf933780cff7a36508`); it is
+diagnostic/rejected evidence only.
+
+The runtime root cause was proven on the exact pinned image
+`ghcr.io/openhands/agent-server@sha256:67d3b88984dd0537de78cf5a354898942d601b8fab9b633a655a4d57bed08d02`:
+the baked image user is `uid=10001(openhands), gid=10001(openhands)`, while
+the host acceptance workspace was `uid=1000 gid=1000` mode `775`. With the
+baked uid 10001, the Agent Server started then exited during lifespan with
+`PermissionError` creating `workspace/conversations`. Runtime diagnostic
+evidence is
+`$LAB_ROOT/evidence/openhands/oh-001d/stage5-runtime-diagnostic-20260816T062633Z.log`
+(SHA-256
+`d3f0b240a2134faad8fb75a97daa3e35aa2387740ec84a69372be39510f60860`).
+
+The proven correction maps the container process to the invoking Agent Lab
+host identity using Docker `--user "${host_uid}:${host_gid}"`, where
+`host_uid = id -u` and `host_gid = id -g`. Both must be numeric; host UID 0
+and host GID 0 are both rejected so this Stage 5 boundary never maps the
+Agent Server to root identity/group. No `chmod 777`, no `chown` of the
+workspace, no ACLs, no baked-root run, and no entrypoint/cmd override are
+performed; host ownership of the disposable workspace is preserved. On the
+exact pinned image this was proven: the server stayed running, an existing
+host-owned file was modified, a new file was created `uid=1000 gid=1000`,
+`workspace/conversations` was created `uid=1000 gid=1000`, and public
+`/server_info` returned 200 (consistent with the corrected auth contract
+below). The adapter records `host_uid`
+and `host_gid` in `instance.state` (parsed, never sourced) and reports them
+in `lab openhands status`.
+
+The auth contract is also corrected from the exact pinned-image probe.
+`/server_info` is a PUBLIC readiness endpoint (unauthenticated GET returns
+200) and is NOT an auth-enforcement surface. Protected `/api/*` endpoints
+authenticate with the `X-Session-API-Key` header, not Bearer: empirically,
+`POST /api/auth/workspace-session` returned 401 without a key, 204 with
+`X-Session-API-Key`, and 401 with Bearer; `GET /api/conversations` returned
+401 without a key, 422 with `X-Session-API-Key` (authenticated but request
+incomplete), and 401 with Bearer. The acceptance test now uses
+unauthenticated `GET /server_info` only for public readiness and
+`POST /api/auth/workspace-session` (401 without key, 204 with
+`X-Session-API-Key`) for protected auth enforcement; it never uses Bearer
+for the success case.
+
+The corrected Stage 5 host acceptance remains PENDING until this correction
+is merged and the corrected acceptance is executed on host. OpenHands remains
+`enabled = false` and `status = "experimental"`; standalone Stage 6 remains
+blocked. The corrected acceptance verifies runtime UID/GID mapping,
+workspace write/ownership, `workspace/conversations` persistence, public
+readiness, and protected API auth as explicit PASS markers, and performs no
+OpenHands conversation, LLM, provider, tool, or agent task.
+
 ### Status after OH-001D
 
 The guarded lock is committed and authoritative for host materialization;
 the relative 7-day freshness rule remains the policy for deliberate future
 relocks. OpenHands remains experimental/disabled. The Stage 5 lifecycle
-adapter and acceptance script are implemented but pending post-merge host
-acceptance; standalone OpenHands acceptance and Agent Server/container
-acceptance are NOT yet complete.
+adapter and acceptance script are implemented and corrected for host UID/GID
+mapping (see "Stage 5 lifecycle correction" above), but the corrected host
+acceptance remains PENDING until this correction is merged and executed on
+host; standalone OpenHands acceptance and Agent Server/container acceptance
+are NOT yet complete, and standalone Stage 6 remains blocked.
 
 ## Docker execution boundary
 
@@ -583,9 +656,15 @@ the Agent Lab Docker lifecycle adapter described above.
 
 ## Portability
 
-This record introduces no host-specific assumptions. It defines no
-`/home` path, username, fixed host port, secret material, GPU dependency,
-or host Python/Node dependency. Ports are dynamic and loopback-bound;
-Python is the Agent Lab-managed `3.13` target; the container image is
-digest-pinned when resolved. All constraints are consistent with
-`docs/PORTABILITY.md`.
+This record introduces no fixed host path, username, host port, secret
+material, GPU dependency, or host Python/Node dependency. Ports are dynamic
+and loopback-bound; Python is the Agent Lab-managed `3.13` target; the
+container image is digest-pinned when resolved. All constraints are
+consistent with `docs/PORTABILITY.md`. The Stage 5 lifecycle correction
+records two runtime profile assumptions that are NOT fixed host paths or
+usernames: the current primary accepted host profile is `linux_amd64` (the
+digest-pinned Agent Server image is `linux/amd64`), and the numeric host
+UID/GID mapping requires a non-root invoking host identity (`id -u`/`id -g`
+both numeric and nonzero). These are runtime identity-mapping preconditions
+for the corrected Stage 5 boundary, not host-specific path or username
+assumptions.

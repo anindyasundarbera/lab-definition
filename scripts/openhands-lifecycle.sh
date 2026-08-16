@@ -5,8 +5,11 @@
 # digest-pinned OpenHands Agent Server image. Enforces the Agent Lab
 # isolation boundary: loopback-only dynamic port, no Docker socket, no host
 # HOME, no definition repo mount, exactly one approved workspace bind mount,
-# immutable digest-qualified image ref, `--pull never`, baked entrypoint/user,
-# and container hardening (no-new-privileges, cap-drop ALL, non-privileged).
+# immutable digest-qualified image ref, `--pull never`, baked entrypoint (the
+# baked image user is intentionally overridden by Agent Lab host UID/GID
+# mapping to preserve writable host-owned disposable workspaces while remaining
+# non-root), and container hardening (no-new-privileges, cap-drop ALL,
+# non-privileged).
 #
 # This script performs NO Docker/runtime execution policy beyond starting the
 # managed server per the boundary above. It is the only entry point used by
@@ -364,6 +367,21 @@ Usage: lab openhands start <workspace-path>"
 
     ensure_local_image
 
+    # Map the container process to the invoking Agent Lab host identity. The
+    # baked image user (uid=10001(openhands)) is intentionally overridden by
+    # Agent Lab host UID/GID mapping to preserve writable host-owned disposable
+    # workspaces while remaining non-root. No chmod/chown/ACL workaround is
+    # performed and the baked entrypoint/cmd are not overridden.
+    local host_uid host_gid
+    host_uid="$(id -u)"
+    host_gid="$(id -g)"
+    [[ "$host_uid" =~ ^[0-9]+$ ]] || die "host uid is not numeric: '$host_uid'"
+    [[ "$host_gid" =~ ^[0-9]+$ ]] || die "host gid is not numeric: '$host_gid'"
+    [[ "$host_uid" -ne 0 ]] \
+        || die "host uid must not be 0 (root); the Agent Server is mapped to the non-root Agent Lab host identity"
+    [[ "$host_gid" -ne 0 ]] \
+        || die "host gid must not be 0 (root group); this Stage 5 boundary never maps the Agent Server to root identity/group"
+
     # Stable per-deployment OH_SECRET_KEY (persisted, never printed, never
     # deleted by stop) + fresh per-start SESSION_API_KEY (never printed).
     ensure_persistent_secret
@@ -391,6 +409,7 @@ Usage: lab openhands start <workspace-path>"
         --pull never \
         --security-opt no-new-privileges:true \
         --cap-drop ALL \
+        --user "${host_uid}:${host_gid}" \
         -e OH_ENABLE_VNC=false \
         --env-file "$OH_CRED_FILE" \
         --label "$OH_LABEL_COMPONENT" \
@@ -426,6 +445,8 @@ Usage: lab openhands start <workspace-path>"
             printf 'host_url=http://127.0.0.1:%s\n' "$host_port"
             printf 'image_ref=%s\n' "$OH_IMAGE_REF"
             printf 'image_id=%s\n' "$image_id"
+            printf 'host_uid=%s\n' "$host_uid"
+            printf 'host_gid=%s\n' "$host_gid"
             printf 'created=%s\n' "$(date +%s)"
         } > "$OH_STATE_FILE"
     ) || die "could not write instance state at $OH_STATE_FILE"
@@ -456,7 +477,7 @@ cmd_status() {
         return 0
     fi
 
-    local cid name ws port url ref img_id created
+    local cid name ws port url ref img_id created h_uid h_gid
     cid="$(state_get "$OH_STATE_FILE" container_id)" || die "malformed state: $OH_STATE_FILE"
     name="$(state_get "$OH_STATE_FILE" container_name)" || name=""
     ws="$(state_get "$OH_STATE_FILE" workspace)" || ws=""
@@ -465,6 +486,8 @@ cmd_status() {
     ref="$(state_get "$OH_STATE_FILE" image_ref)" || ref=""
     img_id="$(state_get "$OH_STATE_FILE" image_id)" || img_id=""
     created="$(state_get "$OH_STATE_FILE" created)" || created=""
+    h_uid="$(state_get "$OH_STATE_FILE" host_uid)" || h_uid=""
+    h_gid="$(state_get "$OH_STATE_FILE" host_gid)" || h_gid=""
 
     echo "Managed OpenHands Agent Server"
     echo "  state file: $OH_STATE_FILE"
@@ -493,6 +516,8 @@ cmd_status() {
     echo "  host port:    ${port:-<unknown>}"
     echo "  url:          ${url:-<unknown>}"
     echo "  created:      ${created:-<unknown>}"
+    echo "  host uid:     ${h_uid:-<unknown>}"
+    echo "  host gid:     ${h_gid:-<unknown>}"
 }
 
 # ---------------------------------------------------------------------------

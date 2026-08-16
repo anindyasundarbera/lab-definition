@@ -1,11 +1,16 @@
 #!/usr/bin/env bash
 # OH-001D Stage 5 lifecycle acceptance for the OpenHands Agent Server adapter.
 #
-# Drives the Agent Lab lifecycle adapter (`lab openhands start/stop/status`)
-# against a disposable workspace and verifies the OH-001D Stage 5 isolation
-# and image contract invariants on the actual container. It performs NO
-# conversation/LLM/provider/tool/agent task: the only runtime probe is the
-# authenticated metadata endpoint `/server_info`.
+# Drives the Agent Lab OpenHands Agent Server lifecycle adapter
+# (`lab openhands start/stop/status`) against a disposable workspace and
+# verifies the OH-001D Stage 5 isolation, image contract, host UID/GID
+# mapping, workspace usability/ownership, public readiness, and protected
+# API auth invariants on the actual container. It performs NO
+# conversation/LLM/provider/tool/agent task: the only runtime probes are the
+# public readiness endpoint `/server_info` (unauthenticated GET) and the
+# protected session-establishment endpoint `/api/auth/workspace-session`
+# (authentication probe only; no OpenHands conversation is created and no
+# tools are executed).
 #
 # Never prints secrets or response bodies. Required PASS markers are emitted
 # only when their corresponding check passes.
@@ -70,9 +75,9 @@ FAILURES=0
 STARTED_BY_TEST=0
 TEST_CID=""
 
-# Temp header file holding the Authorization header for authenticated probes,
-# so the secret never appears on the curl argv. Created lazily in the auth
-# section; the EXIT trap and the post-probe cleanup both remove it.
+# Temp header file holding the X-Session-API-Key header for the protected
+# auth probe, so the secret never appears on the curl argv. Created lazily in
+# the auth section; the EXIT trap and the post-probe cleanup both remove it.
 AUTH_HEADER_FILE=""
 
 pass() { printf '[PASS] %s\n' "$1"; }
@@ -121,6 +126,24 @@ file_mode() {
     return 1
 }
 
+# Portable numeric uid:gid owner reader. Tries GNU `stat -c '%u:%g'`, then
+# BSD/macOS `stat -f '%u:%g'`; fails (returns 1) if neither works. No
+# Perl/Python. Used to verify host ownership of container-created files.
+file_owner() {
+    local path="$1"
+    local owner
+
+    if owner="$(stat -c '%u:%g' "$path" 2>/dev/null)"; then
+        printf '%s\n' "$owner"
+        return 0
+    fi
+    if owner="$(stat -f '%u:%g' "$path" 2>/dev/null)"; then
+        printf '%s\n' "$owner"
+        return 0
+    fi
+    return 1
+}
+
 # ---------------------------------------------------------------------------
 # Disposable acceptance workspace below $LAB_ROOT/workspaces/.
 # ---------------------------------------------------------------------------
@@ -143,7 +166,7 @@ cleanup() {
 
     # Always remove only this test's uniquely constructed workspace. The
     # persistent OH_SECRET_KEY is never removed by this trap. Also remove the
-    # temp Authorization header file if it was created (fallback; the auth
+    # temp X-Session-API-Key header file if it was created (fallback; the auth
     # section removes it immediately after the probes).
     rm -rf "$ACCEPTANCE_WS" >/dev/null 2>&1 || true
     rm -f "$AUTH_HEADER_FILE" >/dev/null 2>&1 || true
@@ -164,6 +187,18 @@ if ! command -v curl >/dev/null 2>&1; then
     die "curl is required for this acceptance test"
 fi
 
+# Derive the invoking Agent Lab host identity. The adapter maps the container
+# process to this uid:gid; both must be numeric and nonzero so this Stage 5
+# boundary never maps the Agent Server to root identity/group.
+HOST_UID="$(id -u)"
+HOST_GID="$(id -g)"
+if [[ ! "$HOST_UID" =~ ^[0-9]+$ || ! "$HOST_GID" =~ ^[0-9]+$ ]]; then
+    die "host uid/gid must be numeric (got uid='${HOST_UID}' gid='${HOST_GID}')"
+fi
+if [[ "$HOST_UID" -eq 0 || "$HOST_GID" -eq 0 ]]; then
+    die "host uid/gid must be nonzero (got uid='${HOST_UID}' gid='${HOST_GID}'); this acceptance must run as a non-root host identity"
+fi
+
 echo "OpenHands Lifecycle Acceptance (OH-001D Stage 5)"
 echo "================================================"
 echo
@@ -172,6 +207,7 @@ echo "LAB_DEFINITION_ROOT: $LAB_DEFINITION_ROOT"
 echo "Adapter:            $LAB_BIN openhands"
 echo "Image:              $OH_IMAGE_REF"
 echo "Platform:           $OH_PLATFORM"
+echo "Host UID/GID:       $HOST_UID:$HOST_GID"
 echo
 
 # Canonical definition HEAD/status snapshot; must be unchanged on exit.
@@ -215,10 +251,25 @@ fi
 CID="$(state_get "$OH_STATE_FILE" container_id)" || { fail "state missing container_id"; exit 1; }
 RECORDED_IMAGE_ID="$(state_get "$OH_STATE_FILE" image_id)" || RECORDED_IMAGE_ID=""
 RECORDED_PORT="$(state_get "$OH_STATE_FILE" host_port)" || RECORDED_PORT=""
+# Recorded host uid/gid bind the audit state to the runtime mapping this
+# acceptance later proves. Treat missing/mismatch as a test failure.
+RECORDED_HOST_UID="$(state_get "$OH_STATE_FILE" host_uid 2>/dev/null || true)"
+RECORDED_HOST_GID="$(state_get "$OH_STATE_FILE" host_gid 2>/dev/null || true)"
 
 if [[ -z "$CID" ]]; then
     fail "recorded container id is empty"
     exit 1
+fi
+
+state_mapping_ok=1
+[[ -n "$RECORDED_HOST_UID" && -n "$RECORDED_HOST_GID" ]] \
+    || { fail "instance state missing host_uid/host_gid audit fields"; state_mapping_ok=0; }
+[[ "$RECORDED_HOST_UID" == "$HOST_UID" ]] \
+    || { fail "recorded host_uid '$RECORDED_HOST_UID' != HOST_UID '$HOST_UID'"; state_mapping_ok=0; }
+[[ "$RECORDED_HOST_GID" == "$HOST_GID" ]] \
+    || { fail "recorded host_gid '$RECORDED_HOST_GID' != HOST_GID '$HOST_GID'"; state_mapping_ok=0; }
+if [[ "$state_mapping_ok" -eq 1 ]]; then
+    pass "instance state recorded host uid/gid ${HOST_UID}:${HOST_GID}"
 fi
 
 # A non-empty CID is now bound: the EXIT trap may stop it (and only it) if
@@ -236,7 +287,8 @@ pass "adapter started managed container $CID"
 echo
 
 # ---------------------------------------------------------------------------
-# Image contract: exact image/ref/id + linux/amd64 + baked entrypoint/cmd/user.
+# Image contract: exact image/ref/id + linux/amd64 (from `docker image
+# inspect`) + baked entrypoint/cmd/workdir + host-mapped Config.User.
 # ---------------------------------------------------------------------------
 echo "=== Image contract ==="
 
@@ -249,9 +301,10 @@ image_platform="$(docker image inspect "$OH_IMAGE_REF" --format '{{.Os}}/{{.Arch
 # that RepoDigests contains the exact digest-qualified ref. RepoDigests is not
 # secret, but never print response bodies elsewhere.
 repo_digest="$(docker image inspect "$OH_IMAGE_REF" --format '{{index .RepoDigests 0}}' 2>/dev/null || true)"
-# .Platform may be absent on older Docker; treat as best-effort (the image
-# platform check above is the authoritative linux/amd64 requirement).
-container_platform="$(docker inspect "$CID" --format '{{.Platform}}' 2>/dev/null || true)"
+# Authoritative platform check is `docker image inspect` Os/Architecture
+# (linux/amd64) above. The container `.Platform` field is NOT asserted equal
+# to `linux/amd64`: Docker 29.7.2 returns just `linux` there, so a literal
+# comparison would be invalid.
 
 image_contract_ok=1
 [[ "$config_image" == "$OH_IMAGE_REF" ]] || { fail "Config.Image is '$config_image', expected immutable ref"; image_contract_ok=0; }
@@ -261,14 +314,13 @@ image_contract_ok=1
 [[ "$repo_digest" == "$OH_IMAGE_REF" ]] \
     || { fail "RepoDigests[0] is '$repo_digest', expected exact immutable ref $OH_IMAGE_REF"; image_contract_ok=0; }
 [[ "$image_platform" == "$OH_PLATFORM" ]] || { fail "image platform '$image_platform' != '$OH_PLATFORM'"; image_contract_ok=0; }
-if [[ -n "$container_platform" && "$container_platform" != "$OH_PLATFORM" ]]; then
-    fail "container platform '$container_platform' != '$OH_PLATFORM'"
-    image_contract_ok=0
-fi
 
 # Baked image contract (OH-001D Stage 5 preflight): Entrypoint
 # ["tini","--","/usr/local/bin/openhands-agent-server"], Cmd null,
-# User "openhands", WorkingDir "/". The adapter overrides none of these.
+# WorkingDir "/". The baked image User ("openhands", uid 10001) is
+# intentionally overridden by Agent Lab host UID/GID mapping; Config.User must
+# equal ${HOST_UID}:${HOST_GID}, not the baked user. The adapter overrides
+# neither the entrypoint nor the cmd.
 entrypoint_json="$(docker inspect "$CID" --format '{{json .Config.Entrypoint}}')"
 cmd_json="$(docker inspect "$CID" --format '{{json .Config.Cmd}}')"
 config_user="$(docker inspect "$CID" --format '{{.Config.User}}')"
@@ -278,13 +330,13 @@ config_workdir="$(docker inspect "$CID" --format '{{.Config.WorkingDir}}')"
     || { fail "baked Entrypoint is '$entrypoint_json'"; image_contract_ok=0; }
 [[ "$cmd_json" == "null" ]] \
     || { fail "baked Cmd is '$cmd_json' (expected null)"; image_contract_ok=0; }
-[[ "$config_user" == "openhands" ]] \
-    || { fail "baked User is '$config_user' (expected openhands)"; image_contract_ok=0; }
+[[ "$config_user" == "${HOST_UID}:${HOST_GID}" ]] \
+    || { fail "Config.User is '$config_user' (expected ${HOST_UID}:${HOST_GID}, host UID/GID mapping)"; image_contract_ok=0; }
 [[ "$config_workdir" == "/" ]] \
     || { fail "baked WorkingDir is '$config_workdir' (expected /)"; image_contract_ok=0; }
 
 if [[ "$image_contract_ok" -eq 1 ]]; then
-    pass "image ref/id, linux/amd64, and baked entrypoint/cmd/user/workdir match contract"
+    pass "image ref/id, linux/amd64, baked entrypoint/cmd/workdir, and host UID/GID Config.User match contract"
 fi
 echo
 
@@ -494,13 +546,135 @@ fi
 echo
 
 # ---------------------------------------------------------------------------
-# Authentication enforcement via /server_info (the only runtime probe).
-# Unauthenticated must be 401/403; authenticated must be 2xx. Never print the
-# secret or the response body.
+# Public readiness: unauthenticated GET /server_info must reach 200 within a
+# bounded timeout. On the exact pinned image /server_info is PUBLIC readiness
+# and is NOT an auth-enforcement surface; do not use it as auth enforcement.
 # ---------------------------------------------------------------------------
-echo "=== Authentication enforcement (/server_info) ==="
+echo "=== Public readiness (/server_info) ==="
 
 SERVER_URL="http://127.0.0.1:${RECORDED_PORT}/server_info"
+
+deadline=$((SECONDS + 60))
+ready_code="000"
+while (( SECONDS < deadline )); do
+    ready_code="$(curl -s --connect-timeout 2 --max-time 5 -o /dev/null -w '%{http_code}' "$SERVER_URL" 2>/dev/null || true)"
+    if [[ "$ready_code" == "200" ]]; then
+        break
+    fi
+    sleep 1
+done
+
+# Status codes are neither secret nor body; safe to report.
+echo "  unauthenticated /server_info -> $ready_code"
+
+if [[ "$ready_code" == "200" ]]; then
+    pass "public readiness endpoint /server_info returned 200"
+    mark "OPENHANDS_PUBLIC_READINESS"
+else
+    fail "public readiness endpoint /server_info did not return 200 (got $ready_code)"
+fi
+echo
+
+# ---------------------------------------------------------------------------
+# Runtime UID/GID mapping: the container process must run as the invoking
+# host uid/gid and be non-root. This proves the baked uid 10001 was overridden
+# and that the server stayed up (a PermissionError exit would leave no running
+# process to exec).
+# ---------------------------------------------------------------------------
+echo "=== Runtime UID/GID mapping ==="
+
+runtime_uid="$(docker exec "$CID" id -u 2>/dev/null || true)"
+runtime_gid="$(docker exec "$CID" id -g 2>/dev/null || true)"
+
+echo "  container runtime uid/gid -> ${runtime_uid:-<none>}:${runtime_gid:-<none>}"
+
+runtime_ok=1
+[[ "$runtime_uid" == "$HOST_UID" ]] \
+    || { fail "runtime uid '$runtime_uid' != host uid '$HOST_UID'"; runtime_ok=0; }
+[[ "$runtime_gid" == "$HOST_GID" ]] \
+    || { fail "runtime gid '$runtime_gid' != host gid '$HOST_GID'"; runtime_ok=0; }
+[[ "$runtime_uid" != "0" ]] \
+    || { fail "runtime uid must not be 0 (root)"; runtime_ok=0; }
+
+if [[ "$runtime_ok" -eq 1 ]]; then
+    pass "container runs as host uid/gid ${HOST_UID}:${HOST_GID} (non-root)"
+    mark "OPENHANDS_RUNTIME_UID_GID_MAPPING"
+fi
+echo
+
+# ---------------------------------------------------------------------------
+# Workspace usability and ownership: prove the host-owned disposable workspace
+# is writable from inside the running container and that files created there
+# are host-owned (uid/gid == HOST_UID/HOST_GID). Pre-created sentinel is
+# appended to; a disposable new file is created; the server-created
+# workspace/conversations directory must exist and be host-owned.
+# ---------------------------------------------------------------------------
+echo "=== Workspace usability and ownership ==="
+
+ws_ok=1
+
+# Append to the pre-created host-owned sentinel from inside the container.
+if docker exec "$CID" sh -c 'printf "%s\n" "appended-by-acceptance" >> /workspace/SENTINEL'; then
+    pass "appended to host-owned sentinel from inside container"
+else
+    fail "could not append to host-owned sentinel from inside container"
+    ws_ok=0
+fi
+
+# Create a disposable new file from inside the container.
+NEW_FILE="$ACCEPTANCE_WS/acceptance-probe-new"
+if docker exec "$CID" sh -c 'printf "%s\n" "created-by-acceptance" > /workspace/acceptance-probe-new'; then
+    pass "created new file from inside container"
+else
+    fail "could not create new file from inside container"
+    ws_ok=0
+fi
+
+# Verify from host that the new file uid/gid equal HOST_UID/HOST_GID.
+if [[ -e "$NEW_FILE" ]]; then
+    new_owner="$(file_owner "$NEW_FILE" || true)"
+    echo "  new file owner -> ${new_owner:-<none>}"
+    if [[ "$new_owner" == "${HOST_UID}:${HOST_GID}" ]]; then
+        pass "new file is host-owned (${HOST_UID}:${HOST_GID})"
+    else
+        fail "new file owner is '$new_owner', expected ${HOST_UID}:${HOST_GID}"
+        ws_ok=0
+    fi
+else
+    fail "new file was not visible on host after container write"
+    ws_ok=0
+fi
+
+# Server-created workspace/conversations must exist and be host-owned.
+CONV_DIR="$ACCEPTANCE_WS/conversations"
+if [[ -d "$CONV_DIR" ]]; then
+    pass "server-created workspace/conversations exists"
+    conv_owner="$(file_owner "$CONV_DIR" || true)"
+    echo "  conversations owner -> ${conv_owner:-<none>}"
+    if [[ "$conv_owner" == "${HOST_UID}:${HOST_GID}" ]]; then
+        pass "workspace/conversations is host-owned"
+    else
+        fail "workspace/conversations owner is '$conv_owner', expected ${HOST_UID}:${HOST_GID}"
+        ws_ok=0
+    fi
+else
+    fail "server-created workspace/conversations not found"
+    ws_ok=0
+fi
+
+if [[ "$ws_ok" -eq 1 ]]; then
+    mark "OPENHANDS_WORKSPACE_WRITE_OWNERSHIP"
+fi
+echo
+
+# ---------------------------------------------------------------------------
+# Protected API auth enforcement via POST /api/auth/workspace-session. On the
+# exact pinned image, protected /api/* auth uses X-Session-API-Key, NOT Bearer.
+# Without the key the protected endpoint must return 401; with the
+# X-Session-API-Key header it must return 204. Never print the secret or any
+# response body.
+# ---------------------------------------------------------------------------
+echo "=== Protected API auth (/api/auth/workspace-session) ==="
 
 # Read the session key from the credentials file; never echo it.
 SESSION_API_KEY="$(state_get "$OH_CRED_FILE" SESSION_API_KEY)" || { fail "credentials file missing SESSION_API_KEY"; exit 1; }
@@ -509,6 +683,8 @@ if [[ -z "$SESSION_API_KEY" ]]; then
     exit 1
 fi
 
+AUTH_URL="http://127.0.0.1:${RECORDED_PORT}/api/auth/workspace-session"
+
 # Keep the secret off the curl argv: write only the header line into a
 # uniquely named temp file under the 0700 state dir, mode 0600. The file
 # content is never echoed to the terminal. curl reads the header from the
@@ -516,52 +692,42 @@ fi
 AUTH_HEADER_FILE="${OH_STATE_DIR}/auth-header-$$-$(date +%s)"
 (
     umask 077
-    printf 'Authorization: Bearer %s\n' "$SESSION_API_KEY" > "$AUTH_HEADER_FILE"
+    printf 'X-Session-API-Key: %s\n' "$SESSION_API_KEY" > "$AUTH_HEADER_FILE"
 )
 chmod 0600 "$AUTH_HEADER_FILE"
 
-# Bounded readiness: authenticated GET must reach 2xx within the deadline.
-deadline=$((SECONDS + 60))
-auth_code="000"
-while (( SECONDS < deadline )); do
-    auth_code="$(curl -s -o /dev/null -w '%{http_code}' \
-        -H "@${AUTH_HEADER_FILE}" \
-        "$SERVER_URL" 2>/dev/null || true)"
-    if [[ "$auth_code" =~ ^2 ]]; then
-        break
-    fi
-    sleep 1
-done
+# Without the key: protected endpoint must return 401.
+nokey_code="$(curl -s --connect-timeout 2 --max-time 5 -o /dev/null -w '%{http_code}' -X POST "$AUTH_URL" 2>/dev/null || true)"
 
-# Unauthenticated probe (after readiness); no Authorization header.
-unauth_code="$(curl -s -o /dev/null -w '%{http_code}' "$SERVER_URL" 2>/dev/null || true)"
+# With X-Session-API-Key: protected endpoint must return 204. Bearer is NOT
+# used for the success case (the exact pinned image rejects Bearer here).
+withkey_code="$(curl -s --connect-timeout 2 --max-time 5 -o /dev/null -w '%{http_code}' -X POST -H "@${AUTH_HEADER_FILE}" "$AUTH_URL" 2>/dev/null || true)"
 
 # Remove the temp header file immediately; the EXIT trap is a fallback.
 rm -f "$AUTH_HEADER_FILE" >/dev/null 2>&1 || true
 AUTH_HEADER_FILE=""
 
 # Status codes are neither secret nor body; safe to report.
-echo "  authenticated /server_info -> $auth_code"
-echo "  unauthenticated /server_info -> $unauth_code"
+echo "  POST /api/auth/workspace-session without key -> $nokey_code"
+echo "  POST /api/auth/workspace-session with X-Session-API-Key -> $withkey_code"
 
 auth_ok=1
-if [[ ! "$auth_code" =~ ^2 ]]; then
-    fail "authenticated /server_info did not return 2xx (got $auth_code)"
-    auth_ok=0
-fi
-if [[ "$unauth_code" != "401" && "$unauth_code" != "403" ]]; then
-    fail "unauthenticated /server_info must be 401 or 403 (got $unauth_code)"
-    auth_ok=0
-fi
+[[ "$nokey_code" == "401" ]] \
+    || { fail "protected endpoint without key must be 401 (got $nokey_code)"; auth_ok=0; }
+[[ "$withkey_code" == "204" ]] \
+    || { fail "protected endpoint with X-Session-API-Key must be 204 (got $withkey_code)"; auth_ok=0; }
 
 if [[ "$auth_ok" -eq 1 ]]; then
-    pass "authentication enforced on /server_info"
+    pass "protected /api/* auth enforced via X-Session-API-Key (401 without, 204 with)"
     mark "OPENHANDS_AUTH_ENFORCED"
 fi
 echo
 
 # Explicitly: no conversation/LLM/provider/tool/agent task was created. The
-# only runtime probe above is the metadata endpoint /server_info (GET).
+# only runtime probes above are the public readiness GET /server_info and the
+# protected POST /api/auth/workspace-session (an authentication/session
+# establishment probe only; no OpenHands conversation is created and no tools
+# are executed).
 pass "no conversation/LLM/provider/tool/agent task created"
 echo
 
