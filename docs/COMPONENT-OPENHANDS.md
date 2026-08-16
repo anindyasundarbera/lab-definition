@@ -7,8 +7,9 @@ EXPERIMENTAL.
 OpenHands is recorded as a candidate Agent Lab component. It is not
 accepted, not baseline, and not enabled. The host-side OpenHands SDK/tools
 runtime has been materialized under OH-001D Stage 2 (outside this
-definition repo), but the Agent Server/container runtime has not been
-pulled, started, or accepted. As of stage OH-001A this record was
+definition repo). Under OH-001D Stage 4 the exact immutable Agent Server
+image was pulled and locally verified, but no Agent Server container has
+yet been started or accepted. As of stage OH-001A this record was
 provenance and definition only: no runtime, bootstrap, acceptance, or
 Serena behavior was modified. Stage OH-001B extends the record with an
 immutable Agent Server artifact pin while keeping the manifest `enabled =
@@ -423,12 +424,102 @@ The disposable probe evidence log is
 (SHA-256
 `d50f64e6983690eb607edb31ae504e07837b94c22f7528cabb108dc942be2c95`).
 
+### Stage 4: Agent Server image record
+
+Stage 4 pulled and locally verified the exact immutable Agent Server image.
+The runnable image is the digest-qualified `linux/amd64` manifest reference
+`ghcr.io/openhands/agent-server@sha256:67d3b88984dd0537de78cf5a354898942d601b8fab9b633a655a4d57bed08d02`
+(the runtime pin from OH-001B). The digest-qualified image was pulled with
+platform `linux/amd64`, and the local image id/digest binding was verified;
+no Agent Server container was created and no runtime execution occurred.
+The canonical definition stayed clean. Stage 4 evidence is captured in
+`$LAB_ROOT/evidence/openhands/oh-001d/stage4-agent-server-image-20260816T033850Z.log`
+(SHA-256
+`62c75c6a631710c41b4f11c9d50f39a74a6ccefccd1d96e2a5bd75c5550bceb0`).
+Stage 4 is an image pull and local-verification record only: no container
+was started and no acceptance was performed. OpenHands remains
+`enabled = false` and `status = "experimental"`.
+
+### Stage 5: lifecycle adapter and image-contract preflight
+
+Stage 5 adds the Agent Lab-owned OpenHands Agent Server lifecycle adapter
+(`scripts/openhands-lifecycle.sh`, exposed as `lab openhands start|status|stop`
+via `bin/lab`) and its lifecycle acceptance script
+(`scripts/test-openhands-lifecycle.sh`, exposed as `lab test
+openhands-lifecycle`). The adapter enforces the Agent Lab isolation boundary:
+
+- immutable digest-qualified image ref only (no mutable tag);
+- `--pull never`, `--platform linux/amd64`, baked entrypoint/user (never
+  overridden), `--security-opt no-new-privileges:true`, `--cap-drop ALL`,
+  `-e OH_ENABLE_VNC=false`;
+- exactly one bind mount of an approved workspace to `/workspace` (rw);
+- loopback-only dynamic port binding (`127.0.0.1::<dynamic>:8000`); port
+  `8002` is never published;
+- no Docker socket, host `HOME` root or arbitrary host-HOME paths, lab
+  definition repo, secrets/state/runtime host mount, privileged mode, or extra
+  mount; only the explicitly approved `$LAB_ROOT/workspaces/...` bind is
+  allowed;
+- workspace validation: an existing real path must resolve strictly below
+  `$LAB_ROOT/workspaces/`; symlink/path escape, `$LAB_DEFINITION_ROOT`, `/`,
+  host `HOME` itself, Docker sockets, and anything outside
+  `$LAB_ROOT/workspaces` are rejected. An approved workspace may legitimately
+  sit below host `HOME` because Agent Lab itself lives under `HOME` on the
+  accepted host; only `HOME` as the mounted root, or any path outside
+  `$LAB_ROOT/workspaces`, is forbidden;
+- `SESSION_API_KEY` is generated fresh every start (>=256-bit entropy from
+  `/dev/urandom` + coreutils, no new dependency); `OH_SECRET_KEY` is generated
+  once, persisted outside Git at `$LAB_ROOT/secrets/openhands/oh-secret-key`
+  (directory `0700`, file `0600`), reused across restarts so persisted
+  encrypted secrets remain decryptable, never printed, and never deleted by
+  `stop`. Per-instance credentials/state remain under
+  `$LAB_ROOT/state/openhands` and are cleared on stop; all secrets are never
+  printed;
+- state dir `$LAB_ROOT/state/openhands` mode `0700`; credentials file mode
+  `0600`; container identity/name, workspace, dynamic host port/url, and
+  immutable image ref/id are stored as non-executable parsed data and never
+  `source`d;
+- one active managed server with mandatory ownership labels; stop/remove
+  verify labels + recorded container id before any destructive action; stop
+  is idempotent, requires successful graceful stop/remove, and never deletes
+  the workspace or the persistent `OH_SECRET_KEY`.
+
+The Stage 5 image-contract preflight recorded the baked image contract that
+the adapter relies on (the adapter overrides none of these): Entrypoint
+`["tini","--","/usr/local/bin/openhands-agent-server"]`; Cmd null; User
+`openhands`; WorkingDir `/`; ports `8000/tcp` and `8002/tcp` exposed; no
+`Volumes`; no `Healthcheck`. Preflight evidence is captured in
+`$LAB_ROOT/evidence/openhands/oh-001d/stage5-image-contract-preflight-20260816T034737Z.log`
+(SHA-256
+`e23822a2d3a7be865b6fccc9f9fe12c9efc0a81bcf8417197095c1452f1bc5fb`).
+
+Stage 5 implements the lifecycle adapter and acceptance script but does NOT
+execute Docker/runtime in the definition repo. Lifecycle acceptance is
+pending post-merge host acceptance (the adapter must be exercised on a host
+with the immutable image present and the Docker daemon reachable).
+OpenHands remains `enabled = false` and `status = "experimental"`; Stage 5
+is implementation only and does not claim lifecycle acceptance passed.
+
+Secrets (`SESSION_API_KEY`, `OH_SECRET_KEY`) are passed to the container as
+environment via Docker `--env-file`; they are never committed, never printed
+by the adapter or acceptance test, and not placed literally on the `docker
+run` process command line. Because Docker environment is visible to any
+principal with Docker-daemon or container-inspect access, Agent Lab treats
+Docker-daemon access as privileged trusted host control-plane access; the
+loopback-only binding, no Docker-socket mount, and disposable workspace
+isolation are the boundary between the untrusted upstream workspace runtime
+and that trusted control plane. The adapter also serializes starts with an
+atomic `mkdir`-based state-directory lock (`$OH_STATE_DIR/start.lock`) so
+concurrent `lab openhands start` invocations cannot corrupt each other's
+state/credentials; a losing start fails without touching the winner's state.
+
 ### Status after OH-001D
 
 The guarded lock is committed and authoritative for host materialization;
 the relative 7-day freshness rule remains the policy for deliberate future
-relocks. OpenHands remains experimental/disabled. Standalone OpenHands
-acceptance and Agent Server/container acceptance are NOT yet complete.
+relocks. OpenHands remains experimental/disabled. The Stage 5 lifecycle
+adapter and acceptance script are implemented but pending post-merge host
+acceptance; standalone OpenHands acceptance and Agent Server/container
+acceptance are NOT yet complete.
 
 ## Docker execution boundary
 
@@ -439,7 +530,10 @@ lifecycle adapter with the following boundary:
   future private network);
 - authentication enabled;
 - no access to the Docker socket;
-- no access to host `HOME`;
+- no mount of the host `HOME` root or arbitrary host-HOME paths; only the
+  explicitly approved `$LAB_ROOT/workspaces/...` bind is allowed (Agent Lab
+  itself lives under `HOME` on the accepted host, so an approved workspace may
+  be a descendant of `HOME`);
 - no mount of canonical project working trees;
 - only the disposable candidate workspace is mounted.
 
