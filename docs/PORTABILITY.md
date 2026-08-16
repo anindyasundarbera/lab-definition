@@ -6,6 +6,17 @@ Agent Lab must be reconstructible on a supported clean host without relying
 on software, language runtimes, ports, paths, credentials, or configuration
 that happen to exist on the originating machine.
 
+Portability is not limited to reconstructing another developer workstation.
+The portable architecture must support reconstructing the durable lab on a
+supported host or server and attaching authorized clients and devices,
+without embedding workstation identity, absolute paths, fixed ports, or
+single-device assumptions into the definition or its contracts. The local
+single-node deployment is one supported profile; a shared server-hosted lab
+is the strategic target (see `docs/SHARED-LAB-DIRECTION.md`). Current local
+implementation must not become incompatible with that target. This states a
+direction and a shape constraint; it does not claim that shared or
+multi-user functionality exists today.
+
 ## Host boundary
 
 The host is infrastructure, not part of Agent Lab.
@@ -125,3 +136,13 @@ A second supported machine should be able to:
 6. execute the same acceptance tests,
 
 without manually reconstructing knowledge from the original host.
+
+This criterion is not limited to reproducing a workstation. The same
+portability must hold when the durable lab is reconstructed on a supported
+host or server and authorized clients or devices attach to it: the
+definition and its contracts must not embed the originating workstation's
+identity, absolute paths, fixed ports, or single-device assumptions. The
+local single-node profile is one valid reconstruction; a shared
+server-hosted reconstruction with attached clients is the strategic target
+and must remain reachable. No shared or multi-user capability is claimed to
+exist today.
