@@ -4,12 +4,12 @@
 - title: Establish Agent Lab governed work ledger
 - component/area: governance / institutional memory
 - steward: Human Steward (Agent Lab)
-- status: CANDIDATE_READY
+- status: CLOSED
 - opened_at: 2026-08-16 (exact time not recorded)
-- closed_at: open
+- closed_at: 2026-08-19 (Phase 0 closure ledger transaction; remote branch publication time is recorded below, but authoritative PR merge/canonical absorption date is not recorded in LabBridge canonicalization evidence)
 - canonical base: 0de668801979db3b180e7f41159189cdd3f4ed5f
-- current canonical head: 0de668801979db3b180e7f41159189cdd3f4ed5f
-- ledger version: 1
+- current canonical head: f6db7511634adba2204937e5bdaa365e24541ae8
+- ledger version: 2
 
 ## Mission/Scope
 
@@ -49,17 +49,25 @@ code/runtime/config/manifest path.
 
 ## Current State/Next Gate
 
-This candidate is CANDIDATE_READY. This ledger file is itself one of the
-five files inside the candidate being gated, so its own candidate
-fingerprint, file SHAs, review ID/verdict, verification ID/result, evidence
-bundle, and commit/branch/PR/merge cannot be embedded here without
-invalidating the binding. They are recorded as `pending external binding`
-and will be backfilled after this candidate's freeze/review/verification/
-merge through the next governed ledger-maintenance update or the finite
-closure ledger transaction. This is compliant with the non-self-
-referential binding rule, not an omission.
+CLOSED. The substantive terminal condition for this documentation-only
+governance work was canonicalization of the five ledger-system docs. That
+condition is met: LabBridge canonicalization verdict is CANONICAL, method
+`exact_commit_ancestor`; the substantive commit
+`e70b978369ed394953bf60271fc4c9ea850715bd` is reachable from the origin
+`main` tip `f6db7511634adba2204937e5bdaa365e24541ae8`. This Phase 0 closure
+ledger transaction backfills the original candidate's exact evidence
+(fingerprint, review, verification, bundle, detached commit, branch) and
+records the accepted canonical head. No runtime/acceptance gate applies to
+this work (documentation-only).
 
-Next gate: independent review (candidate is ready for freeze).
+The post-freeze bindings of the *original* AL-WL-001 candidate have been
+backfilled below from authoritative external evidence. The *closure
+carrier* candidate's own fingerprint/review/verification/commit/branch/PR/
+merge metadata is not self-embedded here, per the finite-closure and
+non-self-referential binding rules (recursion terminators); it remains
+externally content-addressed and auditable through LabBridge/Git history.
+
+No next gate (CLOSED).
 
 ## Artifact Manifest
 
@@ -71,8 +79,8 @@ Next gate: independent review (candidate is ready for freeze).
   - `docs/ledger/README.md`
   - `docs/ledger/OH-001D.md`
   - `docs/ledger/AL-WL-001.md`
-- candidate fingerprint: pending external binding (this ledger is inside the candidate; backfill after freeze/review/verification/merge)
-- file SHAs: pending external binding (this ledger is inside the candidate; backfill after freeze/review/verification/merge)
+- candidate fingerprint: `0ea6c7322e32cdd06c7fe73d19b44db8551042153f4afa32a61082a5ab82b4b9` (backfilled from authoritative external evidence at closure)
+- file SHAs: not recorded (not supplied by LabBridge; exact changed paths plus fingerprint above are the authoritative binding)
 
 ## Decision Log
 
@@ -122,22 +130,39 @@ Next gate: independent review (candidate is ready for freeze).
 | 2026-08-16 | manual inspection | self-referential binding problem found | a ledger inside its own candidate cannot embed that candidate's final fingerprint/file SHA/review/verification/bundle before freeze without invalidating the binding | GAP FOUND (not a failure of substantive work) | normative correction |
 | 2026-08-16 | normative correction | non-self-referential binding rule added | rule added to AGENTS.md + docs/WORK-LEDGER.md; this ledger's own post-freeze values recorded as pending external binding | SCOPE CORRECTED | candidate freeze |
 | 2026-08-16 | agent | candidate ready | job `38e761d7457f8c0f92035a63d30dfd74`, five paths; own fingerprint/review/verification/commit = pending external binding | CANDIDATE_READY | independent review |
+| not recorded | bridge-reviewer | independent review | review `b2d17142aeec9cb52cdfe90d0cbece80`; fingerprint `0ea6c7322e32cdd06c7fe73d19b44db8551042153f4afa32a61082a5ab82b4b9` | APPROVE | verification |
+| not recorded | verification | deterministic verification | verification `42376a14306d08539a2435bec4b127e4` (lab-doctor + serena-regression) | PASS | commit approval |
+| not recorded | Human Steward | commit approval | detached commit `e70b978369ed394953bf60271fc4c9ea850715bd`; evidence bundle `59193f889e93f2e05b03e3b7438459461010c7319a17de75c0ba65dede04301d` | COMMITTED | publication |
+| not recorded | LabBridge | publication/canonicalization | branch `agent/al-wl-001-governed-work-ledger`, published_at 2026-08-16T11:23:31.967333+00:00; PR not recorded (no PR record in LabBridge); merge SHA not recorded (no separate merge SHA in LabBridge); verdict CANONICAL, method `exact_commit_ancestor`, substantive commit `e70b978...` reachable from origin main tip `f6db7511634adba2204937e5bdaa365e24541ae8` | CANONICAL | closure |
+| 2026-08-19 | Phase 0 reconciliation | finite closure ledger transaction | single Human-Steward-authorized Phase 0 candidate (five-path ceiling) covering AL-WL-001 + AL-ARCH-001 finite closure and OH-001D lifecycle maintenance; backfilled original candidate evidence (fingerprint/review/verification/bundle/commit/branch); recorded accepted canonical head `e70b978369ed394953bf60271fc4c9ea850715bd`; current canonical head snapshot `f6db7511634adba2204937e5bdaa365e24541ae8`; carrier self-binding metadata not self-embedded (recursion terminator) | CLOSED | none (CLOSED) |
 
 ## Candidate/Review/Verification Evidence
 
 - candidate job: `38e761d7457f8c0f92035a63d30dfd74`
-- fingerprint: pending external binding
-- review ID: pending external binding — verdict: pending external binding
-- verification ID: pending external binding — result: pending external binding
-- evidence bundle: pending external binding
+- fingerprint: `0ea6c7322e32cdd06c7fe73d19b44db8551042153f4afa32a61082a5ab82b4b9`
+- review ID: `b2d17142aeec9cb52cdfe90d0cbece80` — reviewer: bridge-reviewer — verdict: Approve
+- verification ID: `42376a14306d08539a2435bec4b127e4` — result: PASS (lab-doctor + serena-regression)
+- evidence bundle: `59193f889e93f2e05b03e3b7438459461010c7319a17de75c0ba65dede04301d`
 
 ## Commit/Publication/PR/Merge Evidence
 
-- detached commit: pending external binding
-- branch: pending external binding
-- PR: pending external binding
-- merge SHA: pending external binding
-- canonical sync SHA: pending external binding
+- detached commit: `e70b978369ed394953bf60271fc4c9ea850715bd`
+- branch: `agent/al-wl-001-governed-work-ledger`
+- published at: 2026-08-16T11:23:31.967333+00:00 (remote branch publication, per LabBridge canonicalization evidence)
+- PR: not recorded (no PR record in LabBridge)
+- merge SHA: not recorded (no separate merge SHA recorded in LabBridge; do not fabricate)
+- tag: not recorded (no tag event recorded in LabBridge; do not fabricate)
+- canonical sync SHA: not recorded (LabBridge canonicalization recorded via `exact_commit_ancestor`, not a separate sync SHA)
+- LabBridge canonicalization verdict: CANONICAL — method `exact_commit_ancestor`; substantive commit `e70b978369ed394953bf60271fc4c9ea850715bd` is reachable from origin `main` tip `f6db7511634adba2204937e5bdaa365e24541ae8`.
+
+PR/merge admissibility: the independent reviewer observed commit-message
+labels referencing pull requests but could not independently verify
+reachability/merge metadata with an authoritative Git command, so Phase 0
+does not promote those labels to exact PR/merge bindings. PR numbers and
+merge SHAs remain `not recorded in LabBridge canonicalization evidence`
+and are not backfilled from commit-message labels. The exact LabBridge
+CANONICAL `exact_commit_ancestor` verdict remains the authoritative proof
+used here.
 
 ## Runtime/Acceptance Evidence
 
@@ -177,15 +202,35 @@ doc-only mission completion (merge of the five docs to canonical).
 
 ## Closure
 
-Pending. AL-WL-001 is not CLOSED. After this governance work is reviewed,
-verified, approved, published, and merged to canonical, at most one finite
-closure ledger transaction may mark AL-WL-001 CLOSED with its substantive
-merge SHA recorded as the accepted canonical head. That closure carrier
-itself is not recursively self-recorded (recursion terminator). The closure
-transaction (or the next governed maintenance update) backfills the
-`pending external binding` values recorded above — this candidate's own
-fingerprint/file SHAs/review/verification/bundle/commit/branch/PR/merge —
-from authoritative external evidence; only the bookkeeping carrier's own
-self-binding metadata is exempt.
+CLOSED. AL-WL-001 reached its substantive terminal condition
+(canonicalization of the five ledger-system docs). LabBridge canonicalization
+verdict: CANONICAL, method `exact_commit_ancestor`; the substantive commit
+`e70b978369ed394953bf60271fc4c9ea850715bd` is reachable from origin `main`
+tip `f6db7511634adba2204937e5bdaa365e24541ae8`. This Phase 0 finite closure
+ledger transaction backfilled the original candidate's exact evidence
+(fingerprint `0ea6c732...`, review `b2d17142...`, verification `42376a14...`,
+bundle `59193f88...`, detached commit `e70b978...`, branch
+`agent/al-wl-001-governed-work-ledger`) and records the accepted canonical
+head. PR/merge were recorded as `not recorded` because no PR record exists in
+LabBridge; the exact ancestor canonicalization is authoritative and is not
+fabricated.
 
-- accepted canonical head: pending (not yet merged)
+This closure carrier candidate's own fingerprint/review/verification/commit/
+branch/PR/merge metadata is not self-embedded (finite-closure and
+non-self-referential binding recursion terminators); it remains externally
+content-addressed and auditable through LabBridge/Git history. Closure is
+finite: no further self-referential ledger update is required or permitted
+for AL-WL-001.
+
+Carrier contingency: the `CLOSED` status recorded in this candidate becomes
+canonical only when this Phase 0 closure-carrier candidate lands on `main`.
+If this carrier is rejected, canonical `main` retains ledger version 1
+(`CANDIDATE_READY`) and **no canonical `CLOSED` claim is made**. The
+substantive terminal condition — the original artifacts are already
+canonical (substantive commit `e70b978...` reachable from `main` via
+`exact_commit_ancestor`) — is distinct from, and does not depend on, this
+bookkeeping carrier landing. The carrier's own review/verification/
+fingerprint/commit are not self-embedded here.
+
+- accepted canonical head: `e70b978369ed394953bf60271fc4c9ea850715bd`
+- current canonical head snapshot: `f6db7511634adba2204937e5bdaa365e24541ae8`
