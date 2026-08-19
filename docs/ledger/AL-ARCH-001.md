@@ -4,12 +4,12 @@
 - **Title:** Establish the Shared Agent Lab architectural direction
 - **Component / area:** architecture / shared-lab direction
 - **Steward:** Human Steward (Agent Lab)
-- **Status:** CANDIDATE_READY
+- **Status:** CLOSED
 - **Opened at:** 2026-08-16 (exact time not recorded)
-- **Closed at:** open
+- **Closed at:** 2026-08-19 (Phase 0 closure ledger transaction; remote branch publication time is recorded below, but authoritative PR merge/canonical absorption date is not recorded in LabBridge canonicalization evidence)
 - **Canonical base:** `0de668801979db3b180e7f41159189cdd3f4ed5f`
-- **Current canonical head:** `0de668801979db3b180e7f41159189cdd3f4ed5f`
-- **Ledger version:** 1
+- **Current canonical head:** `f6db7511634adba2204937e5bdaa365e24541ae8`
+- **Ledger version:** 2
 
 ## 1. Mission / Scope
 
@@ -82,36 +82,41 @@ No fourth path is touched. Candidate bound to canonical base
 
 ## 3. Current State / Next Gate
 
-- **Current state:** CANDIDATE_READY. All three authorized documents are
-  prepared within the three-path ceiling. The architecture direction is
-  encoded in `docs/SHARED-LAB-DIRECTION.md`; portability is expanded in
-  `docs/PORTABILITY.md`; this ledger uses this work's governed ledger
-  structure (12 sections, self-contained).
-- **Next gate:** fresh independent review. A prior independent review
-  found an unsupported authority reference in an earlier draft of this
-  ledger (see section 10); that finding was corrected by making this
-  ledger self-contained, which makes the prior review stale. A fresh
-  independent review must verify the three documents and this ledger
-  against the Steward direction before any canonicalization. The
-  candidate's review and verification bindings remain
-  `pending external binding` until that gate completes.
-- **Substantive terminal condition:** canonicalization of the
-  architecture direction (accepted canonical head), followed by finite
-  governed ledger closure maintenance if required. No runtime acceptance
-  is part of this terminal condition (see section 9).
+- **Current state:** CLOSED. The substantive terminal condition
+  (canonicalization of the architecture direction) is met. LabBridge
+  canonicalization verdict: CANONICAL, method `exact_commit_ancestor`;
+  the substantive commit `89e6a3d3f227437a0b5bbd5aa151d619b68674d5` is
+  reachable from origin `main` tip `f6db7511634adba2204937e5bdaa365e24541ae8`.
+  This Phase 0 closure ledger transaction backfilled the original
+  candidate's exact evidence (fingerprint, review, verification, bundle,
+  detached commit, branch) and records the accepted canonical head. No
+  runtime acceptance applies (documentation-only; see section 9).
+- **Next gate:** none (CLOSED).
+- **Substantive terminal condition (recorded as met):** canonicalization
+  of the architecture direction (accepted canonical head
+  `89e6a3d3f227437a0b5bbd5aa151d619b68674d5`), followed by this finite
+  closure ledger transaction. No runtime acceptance is part of this
+  terminal condition (see section 9).
+
+The post-freeze bindings of the *original* AL-ARCH-001 candidate have been
+backfilled below from authoritative external evidence. The *closure
+carrier* candidate's own fingerprint/review/verification/commit/branch/PR/
+merge metadata is not self-embedded here, per the finite-closure and
+non-self-referential binding rules (recursion terminators in section 2).
 
 ## 4. Artifact Manifest
 
 | Path | Kind | Status | Fingerprint / file SHA |
 |------|------|--------|------------------------|
-| `docs/SHARED-LAB-DIRECTION.md` | new | candidate | pending external binding |
-| `docs/PORTABILITY.md` | update | candidate | pending external binding |
-| `docs/ledger/AL-ARCH-001.md` | new | candidate | pending external binding |
+| `docs/SHARED-LAB-DIRECTION.md` | new | canonical | not recorded (per-file); see bundle fingerprint below |
+| `docs/PORTABILITY.md` | update | canonical | not recorded (per-file); see bundle fingerprint below |
+| `docs/ledger/AL-ARCH-001.md` | new | canonical | not recorded (per-file); see bundle fingerprint below |
 
-Candidate bundle fingerprint: pending external binding. File SHAs and
-bundle fingerprint are not self-embedded (section 2, non-self-referential
-binding rule); they are to be established by the fresh independent review
-gate.
+Candidate bundle fingerprint:
+`9b0db7dc9d3cf4bac13b420828d5e1a091eedcb1e8965bd639ea14bb6d4176bb`
+(backfilled from authoritative external evidence at closure). Per-file
+SHAs were not supplied by LabBridge; the exact changed paths plus the
+bundle fingerprint above are the authoritative binding.
 
 ## 5. Decision Log
 
@@ -155,33 +160,49 @@ gate.
 | 2026-08-16 | ChatGPT (orchestrator/delegator) | Candidate ready | status set to CANDIDATE_READY; all three documents prepared within three-path ceiling | Candidate ready for independent review | Independent review (prior) |
 | 2026-08-16 | independent review (prior) | Independent review gate | review and verification bindings pending external binding; review ID not embedded because a later file change makes this review stale | Prior review found unsupported authority reference to a non-canonical external ledger design | Review-requested correction |
 | 2026-08-16 | ChatGPT (orchestrator/delegator) | Review-requested correction | unsupported authority reference removed; ledger made self-contained; non-self-referential and finite closure rules stated in-ledger; prior review made stale by file change, so its ID is not embedded | Ledger self-contained; ready for re-review | Fresh independent review |
-| pending | fresh independent review | Fresh independent review gate | review and verification bindings pending external binding | pending | Canonicalization (terminal condition) |
+| pending | fresh independent review | Fresh independent review gate | review and verification bindings pending external binding | SUPERSEDED — fulfilled by the immediately following actual review row (review `f1dde982b576aa9334f749b7f34db262`); this placeholder row is retained for append-only history | Canonicalization (terminal condition) |
+| not recorded | bridge-reviewer | fresh independent review | review `f1dde982b576aa9334f749b7f34db262`; fingerprint `9b0db7dc9d3cf4bac13b420828d5e1a091eedcb1e8965bd639ea14bb6d4176bb` | Accept / no changes required | verification |
+| not recorded | verification | deterministic verification | verification `d9a7c1d6f81bb8986f4b39f104e1d4de` (lab-doctor + serena-regression) | PASS | commit approval |
+| not recorded | Human Steward | commit approval | detached commit `89e6a3d3f227437a0b5bbd5aa151d619b68674d5`; evidence bundle `a765725c2b9499b773cc0195a0d6851913b12b40d91a231a4879349280420cf5` | COMMITTED | publication |
+| not recorded | LabBridge | publication/canonicalization | branch `agent/al-arch-001-shared-lab-direction`, published_at 2026-08-16T11:23:42.087087+00:00; PR not recorded (no PR record in LabBridge); merge not recorded (no separate merge SHA in LabBridge); verdict CANONICAL, method `exact_commit_ancestor`, substantive commit `89e6a3d3...` reachable from origin main tip `f6db7511634adba2204937e5bdaa365e24541ae8` | CANONICAL | closure |
+| 2026-08-19 | Phase 0 reconciliation | finite closure ledger transaction | single Human-Steward-authorized Phase 0 candidate (five-path ceiling) covering AL-WL-001 + AL-ARCH-001 finite closure and OH-001D lifecycle maintenance; backfilled original candidate evidence (fingerprint/review/verification/bundle/commit/branch); recorded accepted canonical head `89e6a3d3f227437a0b5bbd5aa151d619b68674d5`; current canonical head snapshot `f6db7511634adba2204937e5bdaa365e24541ae8`; carrier self-binding metadata not self-embedded (recursion terminator) | CLOSED | none (CLOSED) |
 
 ## 7. Candidate / Review / Verification Evidence
 
-- **Candidate final fingerprint:** pending external binding
-- **Candidate file SHAs:** pending external binding
-- **Candidate bundle fingerprint:** pending external binding
-- **Independent review ID:** pending external binding
-- **Independent review outcome:** pending external binding
-- **Verification result:** pending external binding
+- **Candidate final fingerprint:** `9b0db7dc9d3cf4bac13b420828d5e1a091eedcb1e8965bd639ea14bb6d4176bb`
+- **Candidate file SHAs:** not recorded (not supplied by LabBridge; exact changed paths plus bundle fingerprint are authoritative)
+- **Candidate bundle fingerprint:** `9b0db7dc9d3cf4bac13b420828d5e1a091eedcb1e8965bd639ea14bb6d4176bb`
+- **Independent review ID:** `f1dde982b576aa9334f749b7f34db262` — reviewer: bridge-reviewer
+- **Independent review outcome:** Accept / no changes required
+- **Verification ID:** `d9a7c1d6f81bb8986f4b39f104e1d4de` — result: PASS (lab-doctor + serena-regression)
+- **Evidence bundle SHA-256:** `a765725c2b9499b773cc0195a0d6851913b12b40d91a231a4879349280420cf5`
 
-Per the non-self-referential binding rule (section 2), these values are
-not self-embedded; they are to be established by the fresh independent
-review gate and backfilled by later governed maintenance.
+These substantive bindings were backfilled at the Phase 0 closure ledger
+transaction from authoritative external evidence. Only the closure
+carrier's own self-binding metadata is exempt (section 2, recursion
+terminators).
 
 ## 8. Commit / Publication / PR / Merge Evidence
 
-- **Commit:** pending external binding
-- **Branch:** pending external binding
-- **PR:** pending external binding
-- **Merge:** pending external binding
-- **Publication / tag:** pending external binding
-- **Accepted canonical head:** pending external binding
+- **Detached commit:** `89e6a3d3f227437a0b5bbd5aa151d619b68674d5`
+- **Branch:** `agent/al-arch-001-shared-lab-direction`
+- **Published at:** 2026-08-16T11:23:42.087087+00:00 (remote branch publication, per LabBridge canonicalization evidence)
+- **PR:** not recorded (no PR record in LabBridge; do not fabricate)
+- **Merge:** not recorded (no separate merge SHA recorded in LabBridge; do not fabricate)
+- **Tag:** not recorded (no tag event recorded in LabBridge; do not fabricate)
+- **Canonical sync SHA:** not recorded (LabBridge canonicalization via `exact_commit_ancestor`; no separate sync SHA)
+- **LabBridge canonicalization verdict:** CANONICAL — method `exact_commit_ancestor`; substantive commit `89e6a3d3f227437a0b5bbd5aa151d619b68674d5` is reachable from origin `main` tip `f6db7511634adba2204937e5bdaa365e24541ae8`.
+- **Accepted canonical head:** `89e6a3d3f227437a0b5bbd5aa151d619b68674d5`
 
-No commit, push, merge, tag, or publication has been performed. These
-bindings are to be established by the fresh independent review and
-canonicalization gate.
+No PR number or separate merge SHA is recorded because no PR record exists
+in LabBridge. The exact ancestor canonicalization is authoritative and is
+not fabricated. PR/merge admissibility: the independent reviewer observed
+commit-message labels referencing pull requests but could not independently
+verify reachability/merge metadata with an authoritative Git command, so
+Phase 0 does not promote those labels to exact PR/merge bindings (PR numbers
+and merge SHAs remain `not recorded in LabBridge canonicalization evidence`;
+not backfilled from commit-message labels). The exact LabBridge CANONICAL
+`exact_commit_ancestor` verdict remains the authoritative proof used here.
 
 ## 9. Runtime / Acceptance Evidence
 
@@ -199,8 +220,15 @@ work introduces no runtime component.
 ## 10. Failures / Rejections / Recoveries
 
 Two pre-review governance findings were corrected; neither is a
-substantive architecture failure, and no candidate was committed or
-published at any point.
+substantive architecture failure. (Ledger-at-creation snapshot: at the
+time these findings were corrected, no candidate had yet been committed or
+published. That snapshot is now **superseded** by later authoritative
+evidence — see section 8: the candidate was subsequently committed as
+detached commit `89e6a3d3f227437a0b5bbd5aa151d619b68674d5`, its remote
+branch `agent/al-arch-001-shared-lab-direction` was published, and the
+exact commit became canonical via LabBridge `exact_commit_ancestor`. The
+supersession is annotated here rather than silently erasing the
+at-creation statement.)
 
 a. **Abbreviated first ledger draft (corrected before review).** The
    first draft of this ledger used an abbreviated structure missing
@@ -226,9 +254,16 @@ b. **Unsupported authority reference found by independent review
    here, and the next gate is a fresh independent review (see section 6).
    This description records the finding without a self-reference.
 
-- **No candidate was committed or published.** No commit, push, merge,
-  tag, or publication occurred at any point, so no published artifact
-  needs rejection or retraction.
+- **No candidate was committed or published (ledger-at-creation snapshot,
+  superseded).** At the time of these pre-review findings, no commit, push,
+  merge, tag, or publication had occurred, so no published artifact needed
+  rejection or retraction. This was true as an at-creation snapshot. It is
+  now **superseded** by later authoritative evidence (section 8): the
+  candidate was subsequently committed (`89e6a3d3...`), its remote branch
+  `agent/al-arch-001-shared-lab-direction` was published, and the exact
+  commit became canonical via LabBridge `exact_commit_ancestor`. The
+  earlier finding history is preserved; only the absolute "at any point"
+  claim is narrowed to its at-creation scope.
 - **No substantive architecture failure.** The architecture direction
   documents (`docs/SHARED-LAB-DIRECTION.md`, `docs/PORTABILITY.md`) are
   preserved byte-for-byte through these corrections; only this ledger
@@ -265,19 +300,37 @@ implementation authorization is implied** by listing any item here.
 
 ## 12. Closure
 
-**Closure: pending.**
+**Closure: CLOSED.**
 
-Closure requires:
+AL-ARCH-001 reached its substantive terminal condition (canonicalization
+of the architecture direction). LabBridge canonicalization verdict:
+CANONICAL, method `exact_commit_ancestor`; the substantive commit
+`89e6a3d3f227437a0b5bbd5aa151d619b68674d5` is reachable from origin `main`
+tip `f6db7511634adba2204937e5bdaa365e24541ae8`. This Phase 0 finite closure
+ledger transaction backfilled the original candidate's exact evidence
+(fingerprint `9b0db7dc...`, review `f1dde982...`, verification `d9a7c1d6...`,
+bundle `a765725c...`, detached commit `89e6a3d3...`, branch
+`agent/al-arch-001-shared-lab-direction`) and records the accepted canonical
+head. PR/merge were recorded as `not recorded` because no PR record exists in
+LabBridge; the exact ancestor canonicalization is authoritative and is not
+fabricated.
 
-1. The fresh independent review gate (section 6, final row) to complete,
-   with review and verification bindings transitioning from
-   `pending external binding` to externally bound values (section 7).
-2. Canonicalization of the architecture direction, with commit/branch/PR/
-   merge and accepted canonical head bindings transitioning from
-   `pending external binding` to externally bound values (section 8).
-3. Finite governed ledger closure maintenance if required (per the finite
-   closure rule in section 2); this one closure update need not
-   recursively self-record its own identity.
+This closure carrier candidate's own fingerprint/review/verification/commit/
+branch/PR/merge metadata is not self-embedded (finite-closure and
+non-self-referential binding recursion terminators, section 2); it remains
+externally content-addressed and auditable through LabBridge/Git history.
+Closure is finite: no further self-referential ledger update is required or
+permitted for AL-ARCH-001.
 
-No canonicalization, merge, promotion, or closure is implied by
-`CANDIDATE_READY`. Accepted canonical head: pending external binding.
+Carrier contingency: the `CLOSED` status recorded in this candidate becomes
+canonical only when this Phase 0 closure-carrier candidate lands on `main`.
+If this carrier is rejected, canonical `main` retains ledger version 1
+(`CANDIDATE_READY`) and **no canonical `CLOSED` claim is made**. The
+substantive terminal condition — the original artifacts are already
+canonical (substantive commit `89e6a3d3...` reachable from `main` via
+`exact_commit_ancestor`) — is distinct from, and does not depend on, this
+bookkeeping carrier landing. The carrier's own review/verification/
+fingerprint/commit are not self-embedded here.
+
+- **Accepted canonical head:** `89e6a3d3f227437a0b5bbd5aa151d619b68674d5`
+- **Current canonical head snapshot:** `f6db7511634adba2204937e5bdaa365e24541ae8`

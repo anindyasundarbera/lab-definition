@@ -11,10 +11,10 @@ definition repo). Under OH-001D Stage 4 the exact immutable Agent Server
 image was pulled and locally verified; Stage 4 itself started no Agent
 Server container. Subsequent Stage 5 failed acceptance/diagnostic/proof
 probes did start disposable Agent Server containers outside this definition
-repo, but no Agent Server/container acceptance has passed. As of stage
-OH-001A this record was
-provenance and definition only: no runtime, bootstrap, acceptance, or
-Serena behavior was modified. Stage OH-001B extends the record with an
+repo, but no Agent Server/container acceptance has passed. At stage
+OH-001A, this record was provenance-and-definition only: no runtime,
+bootstrap, acceptance, or Serena behavior was modified. Stage OH-001B
+extends the record with an
 immutable Agent Server artifact pin while keeping the manifest `enabled =
 false` and `status = "experimental"`. OH-001B performs no installation,
 image pull, clone, fetch, bootstrap, acceptance, runtime start, or Serena
@@ -575,13 +575,21 @@ unauthenticated `GET /server_info` only for public readiness and
 `X-Session-API-Key`) for protected auth enforcement; it never uses Bearer
 for the success case.
 
-The corrected Stage 5 host acceptance remains PENDING until this correction
-is merged and the corrected acceptance is executed on host. OpenHands remains
-`enabled = false` and `status = "experimental"`; standalone Stage 6 remains
-blocked. The corrected acceptance verifies runtime UID/GID mapping,
-workspace write/ownership, `workspace/conversations` persistence, public
-readiness, and protected API auth as explicit PASS markers, and performs no
-OpenHands conversation, LLM, provider, tool, or agent task.
+The Stage 5 lifecycle correction commit
+`ed8e789087225b976f5c84c5b2caf3de5e22a90f` is now canonical on `main`:
+LabBridge canonicalization verdict is CANONICAL, method
+`exact_commit_ancestor`, with the exact commit reachable from origin `main`
+tip `f6db7511634adba2204937e5bdaa365e24541ae8` (publication branch
+`agent/oh-001d-stage5-runtime-boundary-fix`; no PR record or separate merge
+SHA in LabBridge, recorded as `not recorded`, not fabricated). The corrected
+Stage 5 host acceptance remains PENDING: canonical implementation is not
+runtime acceptance, and the corrected acceptance must still be executed on a
+host with the immutable image present and the Docker daemon reachable.
+OpenHands remains `enabled = false` and `status = "experimental"`; standalone
+Stage 6 remains blocked. The corrected acceptance verifies runtime UID/GID
+mapping, workspace write/ownership, `workspace/conversations` persistence,
+public readiness, and protected API auth as explicit PASS markers, and
+performs no OpenHands conversation, LLM, provider, tool, or agent task.
 
 ### Status after OH-001D
 
@@ -589,10 +597,12 @@ The guarded lock is committed and authoritative for host materialization;
 the relative 7-day freshness rule remains the policy for deliberate future
 relocks. OpenHands remains experimental/disabled. The Stage 5 lifecycle
 adapter and acceptance script are implemented and corrected for host UID/GID
-mapping (see "Stage 5 lifecycle correction" above), but the corrected host
-acceptance remains PENDING until this correction is merged and executed on
-host; standalone OpenHands acceptance and Agent Server/container acceptance
-are NOT yet complete, and standalone Stage 6 remains blocked.
+mapping (see "Stage 5 lifecycle correction" above); the correction commit
+`ed8e789087225b976f5c84c5b2caf3de5e22a90f` is canonical on `main` (via
+`exact_commit_ancestor`), but the corrected host acceptance remains PENDING
+and must still be executed on host — canonical implementation is not runtime
+acceptance. Standalone OpenHands acceptance and Agent Server/container
+acceptance are NOT yet complete, and standalone Stage 6 remains blocked.
 
 ## Docker execution boundary
 
